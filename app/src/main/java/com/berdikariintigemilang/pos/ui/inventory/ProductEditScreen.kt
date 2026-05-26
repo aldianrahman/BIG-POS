@@ -2,6 +2,7 @@ package com.berdikariintigemilang.pos.ui.inventory
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,11 +25,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,8 +44,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.data.remote.ProductRequest
+import com.berdikariintigemilang.pos.ui.components.AppCard
 import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
+import com.berdikariintigemilang.pos.ui.components.SectionTitle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,12 +90,24 @@ fun ProductEditScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isEdit) "Edit Produk" else "Tambah Produk") },
+                title = {
+                    Text(
+                        if (state.isEdit) "Edit Produk" else "Tambah Produk",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali") }
-                }
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbar) }
@@ -96,34 +117,62 @@ fun ProductEditScreen(
             return@Scaffold
         }
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Field("SKU*", sku) { sku = it }
-            Field("Barcode", barcode) { barcode = it }
-            Field("Nama*", name) { name = it }
-            Field("Deskripsi", desc) { desc = it }
-            CategoryDropdown(
-                categories = state.categories,
-                selectedId = categoryId,
-                onSelect = { categoryId = it }
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Field("Brand", brand, Modifier.weight(1f)) { brand = it }
-                Field("Unit", unit, Modifier.weight(1f)) { unit = it }
+            // Informasi dasar
+            AppCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SectionTitle(title = "Informasi Dasar", icon = Icons.Filled.Info)
+                    Field("SKU*", sku) { sku = it }
+                    Field("Barcode", barcode) { barcode = it }
+                    Field("Nama*", name) { name = it }
+                    Field("Deskripsi", desc) { desc = it }
+                    CategoryDropdown(
+                        categories = state.categories,
+                        selectedId = categoryId,
+                        onSelect = { categoryId = it }
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Field("Brand", brand, Modifier.weight(1f)) { brand = it }
+                        Field("Unit", unit, Modifier.weight(1f)) { unit = it }
+                    }
+                }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NumField("Harga Beli", buy, Modifier.weight(1f)) { buy = it }
-                NumField("Harga Jual", sell, Modifier.weight(1f)) { sell = it }
+
+            // Harga
+            AppCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SectionTitle(title = "Harga", icon = Icons.Filled.AttachMoney)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NumField("Harga Beli", buy, Modifier.weight(1f)) { buy = it }
+                        NumField("Harga Jual", sell, Modifier.weight(1f)) { sell = it }
+                    }
+                }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NumField("Min Stok", minStock, Modifier.weight(1f)) { minStock = it }
-                if (!state.isEdit) NumField("Stok Awal", initialStock, Modifier.weight(1f)) { initialStock = it }
+
+            // Stok
+            AppCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SectionTitle(title = "Stok", icon = Icons.Filled.Numbers)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NumField("Min Stok", minStock, Modifier.weight(1f)) { minStock = it }
+                        if (!state.isEdit) {
+                            NumField("Stok Awal", initialStock, Modifier.weight(1f)) { initialStock = it }
+                        }
+                    }
+                }
             }
 
             PrimaryButton(
                 text = if (state.isEdit) "SIMPAN PERUBAHAN" else "SIMPAN PRODUK",
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
                 loading = state.saving,
                 enabled = sku.isNotBlank() && name.isNotBlank() && categoryId != null,
                 onClick = {
@@ -150,7 +199,20 @@ fun ProductEditScreen(
 
 @Composable
 private fun Field(label: String, value: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) }, singleLine = true, modifier = modifier.fillMaxWidth())
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        shape = MaterialTheme.shapes.medium,
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedLabelColor = MaterialTheme.colorScheme.primary
+        ),
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -160,6 +222,13 @@ private fun NumField(label: String, value: String, modifier: Modifier = Modifier
         onValueChange = { v -> onChange(v.filter { it.isDigit() }) },
         label = { Text(label) },
         singleLine = true,
+        shape = MaterialTheme.shapes.medium,
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedLabelColor = MaterialTheme.colorScheme.primary
+        ),
         modifier = modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
     )
@@ -175,13 +244,37 @@ private fun CategoryDropdown(
     var expanded by remember { mutableStateOf(false) }
     val selectedName = categories.firstOrNull { it.id == selectedId }?.name ?: "Pilih kategori"
     Column {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(selectedName, modifier = Modifier.weight(1f))
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Icon(
+                Icons.Filled.Category,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                selectedName,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             categories.forEach { c ->
-                DropdownMenuItem(text = { Text(c.name) }, onClick = { onSelect(c.id); expanded = false })
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            c.name,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    onClick = { onSelect(c.id); expanded = false }
+                )
             }
         }
     }

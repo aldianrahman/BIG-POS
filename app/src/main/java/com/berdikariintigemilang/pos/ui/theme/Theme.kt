@@ -8,13 +8,35 @@ import androidx.compose.ui.graphics.Color
 private val LightColors = lightColorScheme(
     primary = BigRed,
     onPrimary = Color.White,
-    primaryContainer = BigRedLight,
+    primaryContainer = BigRedContainer,
+    onPrimaryContainer = OnBigRedContainer,
+
     secondary = PosGreen,
     onSecondary = Color.White,
-    background = PosNeutralBg,
+    secondaryContainer = PosGreenContainer,
+    onSecondaryContainer = OnPosGreenContainer,
+
+    tertiary = PosAmber,
+    onTertiary = Color(0xFF3D2A00),
+    tertiaryContainer = PosAmberContainer,
+    onTertiaryContainer = OnPosAmberContainer,
+
+    background = PosBackground,
+    onBackground = PosOnSurface,
     surface = PosSurface,
     onSurface = PosOnSurface,
-    error = BigRedDark
+    surfaceVariant = PosSurfaceVariant,
+    onSurfaceVariant = PosOnSurfaceVariant,
+    surfaceContainer = PosSurfaceContainer,
+    surfaceContainerHighest = PosSurfaceVariant,
+
+    outline = PosOutline,
+    outlineVariant = PosOutlineVariant,
+
+    error = PosError,
+    onError = Color.White,
+    errorContainer = PosErrorContainer,
+    onErrorContainer = OnPosErrorContainer
 )
 
 /**
@@ -28,6 +50,7 @@ fun PosTheme(
     MaterialTheme(
         colorScheme = LightColors,
         typography = PosTypography,
+        shapes = PosShapes,
         content = content
     )
 }

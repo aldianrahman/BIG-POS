@@ -14,6 +14,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FlashlightOff
@@ -30,9 +30,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -86,7 +88,9 @@ fun ScanScreen(
             ScanOverlay()
         } else {
             Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -95,27 +99,51 @@ fun ScanScreen(
                     color = Color.White,
                     style = MaterialTheme.typography.bodyLarge
                 )
-                TextButton(onClick = { cameraPermission.launchPermissionRequest() }) {
-                    Text("Berikan Izin")
+                TextButton(
+                    onClick = { cameraPermission.launchPermissionRequest() },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        "Berikan Izin",
+                        style = MaterialTheme.typography.labelLarge
+                    )
                 }
             }
         }
 
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+        // Back button — semi-transparent pill
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = Color.Black.copy(alpha = 0.45f)
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Kembali",
+                    tint = Color.White
+                )
+            }
         }
 
         if (state.loading) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
-                color = Color.White
+                color = Color.White,
+                strokeWidth = 3.dp
             )
         }
 
-        SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp))
+        SnackbarHost(
+            snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
     }
 
     // Dialog konfirmasi jumlah setelah barcode terbaca.
@@ -132,18 +160,58 @@ fun ScanScreen(
     state.notFoundCode?.let { msg ->
         AlertDialog(
             onDismissRequest = viewModel::dismissDialog,
-            title = { Text("Tidak ditemukan") },
-            text = { Text(msg) },
-            confirmButton = { TextButton(onClick = viewModel::dismissDialog) { Text("Scan Lagi") } },
-            dismissButton = { TextButton(onClick = onBack) { Text("Kembali") } }
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Text(
+                    "Tidak ditemukan",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissDialog) {
+                    Text("Scan Lagi", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onBack) {
+                    Text("Kembali", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         )
     }
     state.error?.let { err ->
         AlertDialog(
             onDismissRequest = viewModel::dismissDialog,
-            title = { Text("Gagal") },
-            text = { Text(err) },
-            confirmButton = { TextButton(onClick = viewModel::dismissDialog) { Text("Coba Lagi") } }
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Text(
+                    "Gagal",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            text = {
+                Text(
+                    err,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissDialog) {
+                    Text("Coba Lagi", color = MaterialTheme.colorScheme.primary)
+                }
+            }
         )
     }
 }
@@ -197,15 +265,21 @@ private fun CameraScanner(onBarcode: (String) -> Unit) {
             }
         )
 
-        IconButton(
-            onClick = { torchOn = !torchOn },
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+        // Torch toggle — semi-transparent pill
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = Color.Black.copy(alpha = 0.45f)
         ) {
-            Icon(
-                if (torchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
-                contentDescription = "Senter",
-                tint = Color.White
-            )
+            IconButton(onClick = { torchOn = !torchOn }) {
+                Icon(
+                    if (torchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
+                    contentDescription = "Senter",
+                    tint = if (torchOn) Color.Yellow else Color.White
+                )
+            }
         }
     }
 }
@@ -213,17 +287,33 @@ private fun CameraScanner(onBarcode: (String) -> Unit) {
 @Composable
 private fun ScanOverlay() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // Viewfinder frame
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.75f)
                 .size(220.dp)
-                .border(3.dp, Color.White, MaterialTheme.shapes.medium)
+                .border(
+                    width = 3.dp,
+                    color = Color.White.copy(alpha = 0.9f),
+                    shape = MaterialTheme.shapes.medium
+                )
         )
-        Text(
-            "Arahkan kamera ke barcode produk",
-            color = Color.White,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp)
-        )
+
+        // Instruction pill at bottom
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 72.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = Color.Black.copy(alpha = 0.55f)
+        ) {
+            Text(
+                "Arahkan kamera ke barcode produk",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
     }
 }
 

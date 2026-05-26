@@ -1,5 +1,6 @@
 package com.berdikariintigemilang.pos.ui.pos
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -16,12 +18,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.Card
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -34,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.util.Formatters
 import com.berdikariintigemilang.pos.data.cart.CartLine
+import com.berdikariintigemilang.pos.ui.components.AppCard
+import com.berdikariintigemilang.pos.ui.components.EmptyState
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
 
 @Composable
@@ -63,24 +69,41 @@ fun PosScreen(
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Filled.Search, contentDescription = null)
-                    Text("Cari produk (nama / SKU)", style = MaterialTheme.typography.bodyLarge)
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Cari produk (nama / SKU)", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            FilledIconButton(onClick = onScanClick, modifier = Modifier.size(52.dp)) {
+            FilledIconButton(
+                onClick = onScanClick,
+                modifier = Modifier.size(52.dp),
+                shape = MaterialTheme.shapes.medium
+            ) {
                 Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scan barcode")
             }
-            IconButton(onClick = onHistory, modifier = Modifier.size(52.dp)) {
+            FilledIconButton(
+                onClick = onHistory,
+                modifier = Modifier.size(52.dp),
+                shape = MaterialTheme.shapes.medium,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
                 Icon(Icons.Filled.ReceiptLong, contentDescription = "Riwayat transaksi")
             }
         }
 
         if (state.isEmpty) {
-            EmptyCart(Modifier.weight(1f))
+            EmptyState(
+                icon = Icons.Outlined.ShoppingCart,
+                title = "Keranjang kosong",
+                subtitle = "Scan atau cari produk untuk mulai transaksi",
+                modifier = Modifier.weight(1f)
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).padding(top = 12.dp),
@@ -113,59 +136,62 @@ fun PosScreen(
 }
 
 @Composable
-private fun EmptyCart(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            Icons.Filled.ShoppingCart,
-            contentDescription = null,
-            modifier = Modifier.size(72.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
-        Text(
-            "Scan atau cari produk untuk mulai",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = 12.dp),
-            color = MaterialTheme.colorScheme.outline
-        )
-    }
-}
-
-@Composable
 private fun CartItemRow(
     line: CartLine,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onRemove: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AppCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(line.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(line.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
                     "${Formatters.rupiah(line.unitPrice)} · stok ${line.stock}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.outline
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     Formatters.rupiah(line.lineSubtotal),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            IconButton(onClick = onDecrement) { Icon(Icons.Filled.Remove, contentDescription = "Kurangi") }
-            Text(line.quantity.toString(), style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = onIncrement) { Icon(Icons.Filled.Add, contentDescription = "Tambah") }
+            QtyStepper(quantity = line.quantity, onDecrement = onDecrement, onIncrement = onIncrement)
             IconButton(onClick = onRemove) {
                 Icon(Icons.Filled.Delete, contentDescription = "Hapus", tint = MaterialTheme.colorScheme.error)
             }
         }
+    }
+}
+
+@Composable
+private fun QtyStepper(quantity: Int, onDecrement: () -> Unit, onIncrement: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StepIcon(Icons.Filled.Remove, "Kurangi", onDecrement)
+        Text(
+            quantity.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
+        StepIcon(Icons.Filled.Add, "Tambah", onIncrement)
+    }
+}
+
+@Composable
+private fun StepIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+        Icon(icon, contentDescription = desc, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -185,14 +211,15 @@ private fun CheckoutCard(
     var discountText by remember { mutableStateOf(if (discount > 0) discount.toLong().toString() else "") }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Subtotal", style = MaterialTheme.typography.bodyLarge)
+                Text("Subtotal", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(Formatters.rupiah(subtotal), style = MaterialTheme.typography.bodyLarge)
             }
             if (bundleDiscount > 0) {
@@ -200,7 +227,7 @@ private fun CheckoutCard(
                     Column(Modifier.weight(1f)) {
                         Text("Potongan Bundle", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
                         bundleLabels.forEach {
-                            Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Text("-${Formatters.rupiah(bundleDiscount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
@@ -214,25 +241,32 @@ private fun CheckoutCard(
                 },
                 label = { Text("Diskon (Rp)") },
                 singleLine = true,
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
             if (taxAmount > 0) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (taxInclusive) "PPN (termasuk)" else "PPN", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
-                    Text(Formatters.rupiah(taxAmount), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
+                    Text(if (taxInclusive) "PPN (termasuk)" else "PPN", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(Formatters.rupiah(taxAmount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("TOTAL", style = MaterialTheme.typography.titleLarge)
+            Row(
+                Modifier.fillMaxWidth().padding(top = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("TOTAL", style = MaterialTheme.typography.titleMedium)
                 Text(
                     Formatters.rupiah(total),
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
                 )
             }
             PrimaryButton(
                 text = "BAYAR",
+                icon = Icons.Filled.Payments,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = canCheckout,
                 onClick = onCheckout

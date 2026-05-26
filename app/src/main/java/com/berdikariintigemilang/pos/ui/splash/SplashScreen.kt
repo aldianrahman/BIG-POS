@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,12 +36,11 @@ fun SplashScreen(
             verticalArrangement = Arrangement.Center
         ) {
             BrandLogos()
-            Text(
-                text = "POS BIG · LUBY",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(top = 24.dp)
+            CircularProgressIndicator(
+                modifier = Modifier.padding(top = 48.dp).size(32.dp),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.5.dp
             )
-            CircularProgressIndicator(modifier = Modifier.padding(top = 32.dp).size(32.dp))
         }
     }
 }
