@@ -13,6 +13,7 @@ object Routes {
     const val PAYMENT = "payment"
     const val RECEIPT = "receipt/{trxId}"
     const val PRODUCT_DETAIL = "product_detail/{productId}"
+    const val TRANSACTIONS = "transactions"
 
     fun shiftClose(shiftId: Long) = "shift_close/$shiftId"
     fun zReport(shiftId: Long) = "z_report/$shiftId"

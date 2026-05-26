@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -48,6 +49,7 @@ fun PosScreen(
     onScanClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onCheckout: () -> Unit = {},
+    onHistory: () -> Unit = {},
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -71,6 +73,9 @@ fun PosScreen(
             }
             FilledIconButton(onClick = onScanClick, modifier = Modifier.size(52.dp)) {
                 Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scan barcode")
+            }
+            IconButton(onClick = onHistory, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.ReceiptLong, contentDescription = "Riwayat transaksi")
             }
         }
 

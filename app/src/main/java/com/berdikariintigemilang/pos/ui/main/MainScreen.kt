@@ -49,7 +49,8 @@ fun MainScreen(
     onScan: () -> Unit = {},
     onSearch: () -> Unit = {},
     onCheckout: () -> Unit = {},
-    onProductClick: (Long) -> Unit = {}
+    onProductClick: (Long) -> Unit = {},
+    onTransactions: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.POS) }
 
@@ -79,7 +80,8 @@ fun MainScreen(
                 modifier = contentModifier,
                 onScanClick = onScan,
                 onSearchClick = onSearch,
-                onCheckout = onCheckout
+                onCheckout = onCheckout,
+                onHistory = onTransactions
             )
             MainTab.INVENTORY -> InventoryScreen(modifier = contentModifier, onProductClick = onProductClick)
             MainTab.DASHBOARD -> DashboardScreen(contentModifier)
@@ -87,6 +89,7 @@ fun MainScreen(
             MainTab.SETTINGS -> SettingsScreen(
                 onCloseShift = onCloseShift,
                 onLoggedOut = onLoggedOut,
+                onTransactions = onTransactions,
                 modifier = contentModifier
             )
         }

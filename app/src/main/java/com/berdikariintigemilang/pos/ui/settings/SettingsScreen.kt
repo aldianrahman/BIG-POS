@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -45,6 +46,7 @@ import com.google.accompanist.permissions.rememberMultiplePermissionsState
 fun SettingsScreen(
     onCloseShift: (Long) -> Unit,
     onLoggedOut: () -> Unit,
+    onTransactions: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -121,6 +123,11 @@ fun SettingsScreen(
                         Text(if (state.printing) "Mencetak..." else "Test Print")
                     }
                 }
+            }
+
+            OutlinedButton(onClick = onTransactions, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.ReceiptLong, contentDescription = null)
+                Text("  Riwayat Transaksi & Cetak Ulang")
             }
 
             val shiftId = state.currentShiftId

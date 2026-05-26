@@ -95,6 +95,17 @@ interface ApiService {
         @Body body: TransactionRequest
     ): PosApiResponse<TransactionDto>
 
+    @GET("api/pos/transactions")
+    suspend fun transactions(
+        @Query("from") from: String?,
+        @Query("to") to: String?,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): PosApiResponse<TrxPageDto<TransactionDto>>
+
+    @POST("api/pos/transactions/{id}/void")
+    suspend fun voidTransaction(@Path("id") id: Long, @Body body: VoidRequest): PosApiResponse<TransactionDto>
+
     @GET("api/pos/transactions/{id}/receipt")
     suspend fun receipt(@Path("id") id: Long): PosApiResponse<ReceiptDto>
 }

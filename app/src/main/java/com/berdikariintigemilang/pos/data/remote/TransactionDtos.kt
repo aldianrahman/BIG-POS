@@ -18,6 +18,18 @@ data class TransactionRequest(
 )
 
 @JsonClass(generateAdapter = true)
+data class VoidRequest(val reason: String)
+
+/** Bentuk Spring Page (field "number" untuk halaman). */
+@JsonClass(generateAdapter = true)
+data class TrxPageDto<T>(
+    val content: List<T> = emptyList(),
+    val number: Int = 0,
+    val totalElements: Long = 0,
+    val totalPages: Int = 0
+)
+
+@JsonClass(generateAdapter = true)
 data class TransactionItemDto(
     val id: Long = 0,
     val productId: Long = 0,

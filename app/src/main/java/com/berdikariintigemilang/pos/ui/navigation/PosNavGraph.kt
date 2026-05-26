@@ -22,6 +22,7 @@ import com.berdikariintigemilang.pos.ui.shift.ShiftOpenScreen
 import com.berdikariintigemilang.pos.ui.shift.ZReportScreen
 import com.berdikariintigemilang.pos.ui.splash.SplashDestination
 import com.berdikariintigemilang.pos.ui.splash.SplashScreen
+import com.berdikariintigemilang.pos.ui.transactions.TransactionHistoryScreen
 
 @Composable
 fun PosNavGraph(
@@ -80,7 +81,15 @@ fun PosNavGraph(
                 onScan = { navController.navigate(Routes.SCAN) },
                 onSearch = { navController.navigate(Routes.PRODUCT_SEARCH) },
                 onCheckout = { navController.navigate(Routes.PAYMENT) },
-                onProductClick = { productId -> navController.navigate(Routes.productDetail(productId)) }
+                onProductClick = { productId -> navController.navigate(Routes.productDetail(productId)) },
+                onTransactions = { navController.navigate(Routes.TRANSACTIONS) }
+            )
+        }
+
+        composable(Routes.TRANSACTIONS) {
+            TransactionHistoryScreen(
+                onBack = { navController.popBackStack() },
+                onOpenReceipt = { trxId -> navController.navigate(Routes.receipt(trxId)) }
             )
         }
 
@@ -114,9 +123,7 @@ fun PosNavGraph(
             route = Routes.RECEIPT,
             arguments = listOf(navArgument("trxId") { type = NavType.StringType })
         ) {
-            ReceiptScreen(onDone = {
-                navController.popBackStack(Routes.MAIN, inclusive = false)
-            })
+            ReceiptScreen(onDone = { navController.popBackStack() })
         }
 
         composable(
