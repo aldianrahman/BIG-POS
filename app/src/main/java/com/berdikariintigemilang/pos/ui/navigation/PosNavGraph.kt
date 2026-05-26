@@ -11,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.berdikariintigemilang.pos.ui.auth.LoginScreen
 import com.berdikariintigemilang.pos.ui.main.AppViewModel
+import com.berdikariintigemilang.pos.ui.inventory.ProductDetailScreen
 import com.berdikariintigemilang.pos.ui.main.MainScreen
 import com.berdikariintigemilang.pos.ui.pos.PaymentScreen
 import com.berdikariintigemilang.pos.ui.pos.ProductSearchScreen
@@ -78,8 +79,16 @@ fun PosNavGraph(
                 },
                 onScan = { navController.navigate(Routes.SCAN) },
                 onSearch = { navController.navigate(Routes.PRODUCT_SEARCH) },
-                onCheckout = { navController.navigate(Routes.PAYMENT) }
+                onCheckout = { navController.navigate(Routes.PAYMENT) },
+                onProductClick = { productId -> navController.navigate(Routes.productDetail(productId)) }
             )
+        }
+
+        composable(
+            route = Routes.PRODUCT_DETAIL,
+            arguments = listOf(navArgument("productId") { type = NavType.StringType })
+        ) {
+            ProductDetailScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.SCAN) {

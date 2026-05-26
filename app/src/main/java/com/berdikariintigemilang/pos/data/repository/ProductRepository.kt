@@ -5,6 +5,7 @@ import com.berdikariintigemilang.pos.core.network.safePosCall
 import com.berdikariintigemilang.pos.data.remote.ApiService
 import com.berdikariintigemilang.pos.data.remote.PageDto
 import com.berdikariintigemilang.pos.data.remote.ProductDto
+import com.berdikariintigemilang.pos.data.remote.ProductRequest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,4 +18,10 @@ class ProductRepository @Inject constructor(
 
     suspend fun byBarcode(barcode: String): ApiResult<ProductDto> =
         safePosCall { api.productByBarcode(barcode) }
+
+    suspend fun getById(id: Long): ApiResult<ProductDto> =
+        safePosCall { api.product(id) }
+
+    suspend fun update(id: Long, request: ProductRequest): ApiResult<ProductDto> =
+        safePosCall { api.updateProduct(id, request) }
 }

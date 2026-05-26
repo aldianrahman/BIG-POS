@@ -28,3 +28,17 @@ data class PageDto<T>(
     val totalElements: Long = 0,
     val totalPages: Int = 0
 )
+
+@JsonClass(generateAdapter = true)
+data class ProductRequest(
+    val sku: String,
+    val barcode: String? = null,
+    val name: String,
+    val description: String? = null,
+    val categoryId: Long,
+    val brand: String = "LUBY",
+    val unit: String = "PCS",
+    val purchasePrice: Double = 0.0,
+    val sellingPrice: Double = 0.0,
+    val minStock: Int? = null
+)
