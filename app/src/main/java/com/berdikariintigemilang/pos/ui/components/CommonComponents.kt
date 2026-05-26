@@ -47,24 +47,17 @@ fun PrimaryButton(
     }
 }
 
-/** Logo BIG GROUP + LUBY berdampingan. */
+/** Logo aplikasi (BIG POS). */
 @Composable
 fun BrandLogos(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(
-            painter = painterResource(id = R.drawable.logo_big),
-            contentDescription = "BIG GROUP",
-            modifier = Modifier.height(48.dp),
-            contentScale = ContentScale.Fit
-        )
-        Image(
-            painter = painterResource(id = R.drawable.home_logo),
-            contentDescription = "LUBY",
-            modifier = Modifier.height(48.dp),
+            painter = painterResource(id = R.drawable.big_pos),
+            contentDescription = "BIG POS",
+            modifier = Modifier.height(96.dp),
             contentScale = ContentScale.Fit
         )
     }
