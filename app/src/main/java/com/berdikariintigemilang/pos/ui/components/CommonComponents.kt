@@ -1,0 +1,78 @@
+package com.berdikariintigemilang.pos.ui.components
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.berdikariintigemilang.pos.R
+
+@Composable
+fun PrimaryButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    loading: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled && !loading,
+        modifier = modifier.height(52.dp)
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        } else {
+            Text(text, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+/** Logo BIG GROUP + LUBY berdampingan. */
+@Composable
+fun BrandLogos(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.logo_big),
+            contentDescription = "BIG GROUP",
+            modifier = Modifier.height(48.dp),
+            contentScale = ContentScale.Fit
+        )
+        Image(
+            painter = painterResource(id = R.drawable.home_logo),
+            contentDescription = "LUBY",
+            modifier = Modifier.height(48.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
+fun FullScreenLoading(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
