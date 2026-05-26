@@ -12,7 +12,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledIconButtonDefaults
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -83,7 +83,7 @@ fun QuantityDialog(
                     FilledIconButton(
                         onClick = { qtyText = (qty - 1).coerceAtLeast(1).toString() },
                         modifier = Modifier.size(48.dp),
-                        colors = FilledIconButtonDefaults.filledIconButtonColors(
+                        colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -106,7 +106,7 @@ fun QuantityDialog(
                     FilledIconButton(
                         onClick = { qtyText = (qty + 1).coerceAtMost(maxStock).toString() },
                         modifier = Modifier.size(48.dp),
-                        colors = FilledIconButtonDefaults.filledIconButtonColors(
+                        colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )

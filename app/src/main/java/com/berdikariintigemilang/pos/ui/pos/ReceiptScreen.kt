@@ -20,7 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedButtonDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -147,7 +147,7 @@ fun ReceiptScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.printing,
                 shape = MaterialTheme.shapes.medium,
-                colors = OutlinedButtonDefaults.outlinedButtonColors(
+                colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {

@@ -190,7 +190,7 @@ private fun ReportContent(report: ZReportDto, onDone: () -> Unit, modifier: Modi
                 ReportInfoRow(
                     label = "Selisih",
                     value = Formatters.rupiah(report.cashDifference),
-                    valueColor = if (report.cashDifference >= 0)
+                    valueColor = if ((report.cashDifference ?: 0.0) >= 0)
                         MaterialTheme.colorScheme.secondary
                     else
                         MaterialTheme.colorScheme.error,
