@@ -123,4 +123,8 @@ interface ApiService {
     // ===== Bundles =====
     @POST("api/pos/bundles/calculate")
     suspend fun calculateBundles(@Body body: BundleCalcRequest): PosApiResponse<BundleCalcResult>
+
+    // ===== Settings =====
+    @GET("api/pos/settings/receipt")
+    suspend fun receiptSetting(): PosApiResponse<ReceiptSettingDto>
 }

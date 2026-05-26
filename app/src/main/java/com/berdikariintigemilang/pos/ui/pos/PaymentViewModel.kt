@@ -6,7 +6,10 @@ import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.remote.TransactionItemRequest
 import com.berdikariintigemilang.pos.data.remote.TransactionRequest
+import com.berdikariintigemilang.pos.data.remote.taxFor
+import com.berdikariintigemilang.pos.data.remote.totalFor
 import com.berdikariintigemilang.pos.data.repository.BundleRepository
+import com.berdikariintigemilang.pos.data.repository.SettingsRepository
 import com.berdikariintigemilang.pos.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -22,6 +25,8 @@ data class PaymentUiState(
     val subtotal: Double = 0.0,
     val discount: Double = 0.0,
     val bundleDiscount: Double = 0.0,
+    val taxAmount: Double = 0.0,
+    val taxInclusive: Boolean = true,
     val total: Double = 0.0,
     val cash: Long = 0,
     val submitting: Boolean = false,
@@ -35,7 +40,8 @@ data class PaymentUiState(
 class PaymentViewModel @Inject constructor(
     private val cartManager: CartManager,
     private val transactionRepository: TransactionRepository,
-    private val bundleRepository: BundleRepository
+    private val bundleRepository: BundleRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     // Idempotency key tetap selama layar ini hidup (retry aman tak dobel).
@@ -48,16 +54,20 @@ class PaymentViewModel @Inject constructor(
     val success = _success.receiveAsFlow()
 
     init {
-        // Ambil potongan bundle dari server agar total yang ditagih sudah benar.
+        // Ambil potongan bundle + PPN dari server agar total yang ditagih benar.
         viewModelScope.launch {
             val lines = cartManager.lines.value
-            if (lines.isNotEmpty()) {
-                (bundleRepository.calculate(lines) as? ApiResult.Success)?.let { res ->
-                    _state.update { st ->
-                        val total = (st.subtotal - st.discount - res.data.bundleDiscount).coerceAtLeast(0.0)
-                        st.copy(bundleDiscount = res.data.bundleDiscount, total = total)
-                    }
-                }
+            val bundleDiscount = if (lines.isEmpty()) 0.0
+            else (bundleRepository.calculate(lines) as? ApiResult.Success)?.data?.bundleDiscount ?: 0.0
+            val taxCfg = (settingsRepository.receiptSetting() as? ApiResult.Success)?.data
+            _state.update { st ->
+                val base = (st.subtotal - st.discount - bundleDiscount).coerceAtLeast(0.0)
+                st.copy(
+                    bundleDiscount = bundleDiscount,
+                    taxAmount = taxCfg.taxFor(base),
+                    taxInclusive = taxCfg?.taxInclusive ?: true,
+                    total = taxCfg.totalFor(base)
+                )
             }
         }
     }

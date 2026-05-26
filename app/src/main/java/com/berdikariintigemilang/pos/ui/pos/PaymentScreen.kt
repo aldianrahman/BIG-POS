@@ -67,6 +67,9 @@ fun PaymentScreen(
                         AmountRow("Subtotal", Formatters.rupiah(state.subtotal))
                         AmountRow("Potongan Bundle", "-" + Formatters.rupiah(state.bundleDiscount), color = MaterialTheme.colorScheme.secondary)
                     }
+                    if (state.taxAmount > 0) {
+                        AmountRow(if (state.taxInclusive) "PPN (termasuk)" else "PPN", Formatters.rupiah(state.taxAmount))
+                    }
                     AmountRow("Total", Formatters.rupiah(state.total), big = true)
                     AmountRow("Uang Diterima", Formatters.rupiah(state.cash))
                     AmountRow(

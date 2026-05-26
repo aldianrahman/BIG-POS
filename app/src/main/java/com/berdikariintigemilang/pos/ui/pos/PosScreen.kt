@@ -102,6 +102,8 @@ fun PosScreen(
             discount = state.discount,
             bundleDiscount = state.bundleDiscount,
             bundleLabels = state.appliedBundles.map { "${it.name} x${it.count}" },
+            taxAmount = state.taxAmount,
+            taxInclusive = state.taxInclusive,
             total = state.total,
             canCheckout = state.canCheckout,
             onDiscountChange = viewModel::setDiscount,
@@ -173,6 +175,8 @@ private fun CheckoutCard(
     discount: Double,
     bundleDiscount: Double,
     bundleLabels: List<String>,
+    taxAmount: Double,
+    taxInclusive: Boolean,
     total: Double,
     canCheckout: Boolean,
     onDiscountChange: (Double) -> Unit,
@@ -213,6 +217,12 @@ private fun CheckoutCard(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
+            if (taxAmount > 0) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (taxInclusive) "PPN (termasuk)" else "PPN", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
+                    Text(Formatters.rupiah(taxAmount), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("TOTAL", style = MaterialTheme.typography.titleLarge)
                 Text(
