@@ -119,13 +119,14 @@ fun ReceiptScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (state.error != null) {
                         Text(
                             state.error!!,
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(16.dp)
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     } else {
                         Text(
@@ -134,8 +135,7 @@ fun ReceiptScreen(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 13.sp,
                             lineHeight = 18.sp,
-                            softWrap = false,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                            softWrap = false
                         )
                     }
                 }

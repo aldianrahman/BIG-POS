@@ -72,9 +72,13 @@ fun PrimaryButton(
                 color = Color.White
             )
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 icon?.let { Icon(it, contentDescription = null, tint = contentColor, modifier = Modifier.size(20.dp)) }
-                Text(text, style = MaterialTheme.typography.labelLarge, color = contentColor)
+                Text(text, style = MaterialTheme.typography.labelLarge, color = contentColor, maxLines = 1)
             }
         }
     }
