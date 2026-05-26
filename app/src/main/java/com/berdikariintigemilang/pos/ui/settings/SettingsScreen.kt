@@ -38,8 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -55,22 +54,26 @@ fun SettingsScreen(
     var showPickerDialog by remember { mutableStateOf(false) }
 
     val needsBtPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val btPermission = rememberPermissionState(Manifest.permission.BLUETOOTH_CONNECT)
+    // Android 12+: connect butuh BLUETOOTH_CONNECT, dan cancelDiscovery saat
+    // menyambung printer butuh BLUETOOTH_SCAN.
+    val btPermissions = rememberMultiplePermissionsState(
+        listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+    )
     // Aksi yang menunggu izin BT diberikan.
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
-    LaunchedEffect(btPermission.status.isGranted) {
-        if (btPermission.status.isGranted) {
+    LaunchedEffect(btPermissions.allPermissionsGranted) {
+        if (btPermissions.allPermissionsGranted) {
             pendingAction?.invoke()
             pendingAction = null
         }
     }
 
     fun withBt(action: () -> Unit) {
-        if (!needsBtPermission || btPermission.status.isGranted) action()
-        else { pendingAction = action; btPermission.launchPermissionRequest() }
+        if (!needsBtPermission || btPermissions.allPermissionsGranted) action()
+        else { pendingAction = action; btPermissions.launchMultiplePermissionRequest() }
     }
 
     Scaffold(modifier = modifier, snackbarHost = { SnackbarHost(snackbar) }) { padding ->

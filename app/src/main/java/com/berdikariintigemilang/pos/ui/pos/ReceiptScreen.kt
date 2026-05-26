@@ -38,8 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -51,20 +50,22 @@ fun ReceiptScreen(
     val snackbar = remember { SnackbarHostState() }
 
     val needsBtPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val btPermission = rememberPermissionState(Manifest.permission.BLUETOOTH_CONNECT)
+    val btPermissions = rememberMultiplePermissionsState(
+        listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+    )
     var pendingPrint by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
-    LaunchedEffect(btPermission.status.isGranted) {
-        if (btPermission.status.isGranted && pendingPrint) {
+    LaunchedEffect(btPermissions.allPermissionsGranted) {
+        if (btPermissions.allPermissionsGranted && pendingPrint) {
             pendingPrint = false
             viewModel.print()
         }
     }
 
     fun doPrint() {
-        if (!needsBtPermission || btPermission.status.isGranted) viewModel.print()
-        else { pendingPrint = true; btPermission.launchPermissionRequest() }
+        if (!needsBtPermission || btPermissions.allPermissionsGranted) viewModel.print()
+        else { pendingPrint = true; btPermissions.launchMultiplePermissionRequest() }
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
