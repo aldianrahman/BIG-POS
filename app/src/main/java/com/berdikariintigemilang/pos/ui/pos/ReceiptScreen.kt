@@ -2,8 +2,8 @@ package com.berdikariintigemilang.pos.ui.pos
 
 import android.Manifest
 import android.os.Build
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Print
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -84,21 +83,33 @@ fun ReceiptScreen(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            // Area struk: kertas putih di tengah layar.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                contentAlignment = Alignment.TopCenter
+            ) {
                 if (state.error != null) {
                     Text(state.error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
                 } else {
-                    Surface(color = Color(0xFF101418), modifier = Modifier.fillMaxSize()) {
+                    Surface(
+                        color = Color(0xFFFFFDF5),
+                        shape = MaterialTheme.shapes.small,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        // Teks rata kiri (monospace sudah ter-padding 32 kolom);
+                        // kartu kertasnya yang di-center oleh Box di atas.
                         Text(
                             text = state.content,
-                            color = Color(0xFFB9F6CA),
+                            color = Color(0xFF1A1A1A),
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .horizontalScroll(rememberScrollState())
-                                .padding(12.dp)
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp)
                         )
                     }
                 }
