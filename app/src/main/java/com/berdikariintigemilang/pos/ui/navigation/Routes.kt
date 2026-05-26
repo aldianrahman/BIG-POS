@@ -13,12 +13,14 @@ object Routes {
     const val PAYMENT = "payment"
     const val RECEIPT = "receipt/{trxId}"
     const val PRODUCT_DETAIL = "product_detail/{productId}"
+    const val PRODUCT_EDIT = "product_edit/{productId}"
     const val TRANSACTIONS = "transactions"
 
     fun shiftClose(shiftId: Long) = "shift_close/$shiftId"
     fun zReport(shiftId: Long) = "z_report/$shiftId"
     fun receipt(trxId: Long) = "receipt/$trxId"
     fun productDetail(productId: Long) = "product_detail/$productId"
+    fun productEdit(productId: Long) = "product_edit/$productId"
 }
 
 /** Tab di bottom navigation MainScreen. */

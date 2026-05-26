@@ -46,14 +46,17 @@ import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
 @Composable
 fun ProductDetailScreen(
     onBack: () -> Unit,
+    onEdit: (Long) -> Unit = {},
     viewModel: ProductDetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     var showAdjust by remember { mutableStateOf(false) }
-    var showEdit by remember { mutableStateOf(false) }
+    var showDelete by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(Unit) { viewModel.deleted.collect { onBack() } }
 
     Scaffold(
         topBar = {
@@ -97,8 +100,15 @@ fun ProductDetailScreen(
                         Button(onClick = { showAdjust = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.saving) {
                             Text("Sesuaikan Stok")
                         }
-                        OutlinedButton(onClick = { showEdit = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.saving) {
-                            Text("Edit Harga & Min Stok")
+                        OutlinedButton(onClick = { onEdit(p.id) }, modifier = Modifier.fillMaxWidth(), enabled = !state.saving) {
+                            Text("Edit Produk")
+                        }
+                        OutlinedButton(
+                            onClick = { showDelete = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !state.saving && p.isActive
+                        ) {
+                            Text("Hapus Produk", color = MaterialTheme.colorScheme.error)
                         }
                     } else {
                         Text(
@@ -118,14 +128,18 @@ fun ProductDetailScreen(
             onConfirm = { qty, notes -> viewModel.adjustStock(qty, notes); showAdjust = false }
         )
     }
-    if (showEdit) {
-        state.product?.let { p ->
-            EditPriceDialog(
-                product = p,
-                onDismiss = { showEdit = false },
-                onConfirm = { buy, sell, min -> viewModel.updatePrice(buy, sell, min); showEdit = false }
-            )
-        }
+    if (showDelete) {
+        AlertDialog(
+            onDismissRequest = { showDelete = false },
+            title = { Text("Hapus Produk") },
+            text = { Text("Nonaktifkan produk \"${state.product?.name ?: ""}\"? Produk tidak akan muncul lagi di kasir.") },
+            confirmButton = {
+                TextButton(onClick = { showDelete = false; viewModel.delete() }) {
+                    Text("Hapus", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showDelete = false }) { Text("Batal") } }
+        )
     }
 }
 
@@ -157,30 +171,6 @@ private fun AdjustDialog(onDismiss: () -> Unit, onConfirm: (Int, String) -> Unit
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(qty.toIntOrNull() ?: 0, notes.trim()) }) { Text("Simpan") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } }
-    )
-}
-
-@Composable
-private fun EditPriceDialog(product: ProductDto, onDismiss: () -> Unit, onConfirm: (Double, Double, Int) -> Unit) {
-    var buy by remember { mutableStateOf(product.purchasePrice.toLong().toString()) }
-    var sell by remember { mutableStateOf(product.sellingPrice.toLong().toString()) }
-    var min by remember { mutableStateOf((product.minStock ?: 0).toString()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit Harga & Min Stok") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = buy, onValueChange = { v -> buy = v.filter { it.isDigit() } }, label = { Text("Harga Beli") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                OutlinedTextField(value = sell, onValueChange = { v -> sell = v.filter { it.isDigit() } }, label = { Text("Harga Jual") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                OutlinedTextField(value = min, onValueChange = { v -> min = v.filter { it.isDigit() } }, label = { Text("Min Stok") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onConfirm(buy.toDoubleOrNull() ?: 0.0, sell.toDoubleOrNull() ?: 0.0, min.toIntOrNull() ?: 0)
-            }) { Text("Simpan") }
-        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } }
     )
 }

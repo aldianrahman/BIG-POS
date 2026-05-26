@@ -1,6 +1,7 @@
 package com.berdikariintigemilang.pos.data.remote
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -48,8 +49,18 @@ interface ApiService {
     @GET("api/pos/products/{id}")
     suspend fun product(@Path("id") id: Long): PosApiResponse<ProductDto>
 
+    @POST("api/pos/products")
+    suspend fun createProduct(@Body body: ProductRequest): PosApiResponse<ProductDto>
+
     @PUT("api/pos/products/{id}")
     suspend fun updateProduct(@Path("id") id: Long, @Body body: ProductRequest): PosApiResponse<ProductDto>
+
+    @DELETE("api/pos/products/{id}")
+    suspend fun deleteProduct(@Path("id") id: Long): PosApiResponse<ProductDto>
+
+    // ===== Categories =====
+    @GET("api/pos/categories")
+    suspend fun categories(@Query("flat") flat: Boolean): PosApiResponse<List<CategoryDto>>
 
     // ===== Inventory =====
     @GET("api/pos/inventory/stocks")

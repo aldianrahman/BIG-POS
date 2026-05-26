@@ -43,12 +43,25 @@ class ProductDetailViewModel @Inject constructor(
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
 
+    private val _deleted = Channel<Unit>(Channel.BUFFERED)
+    val deleted = _deleted.receiveAsFlow()
+
     init {
         viewModelScope.launch {
             val admin = authRepository.userFlow.first()?.isAdmin ?: false
             _state.update { it.copy(isAdmin = admin) }
         }
-        load()
+        // load() dipanggil dari layar (LaunchedEffect) agar refresh saat kembali dari edit.
+    }
+
+    fun delete() {
+        _state.update { it.copy(saving = true) }
+        viewModelScope.launch {
+            when (val res = productRepository.delete(productId)) {
+                is ApiResult.Success -> { _messages.send("Produk dinonaktifkan"); _deleted.send(Unit) }
+                is ApiResult.Error -> { _state.update { it.copy(saving = false) }; _messages.send(res.message) }
+            }
+        }
     }
 
     fun load() {

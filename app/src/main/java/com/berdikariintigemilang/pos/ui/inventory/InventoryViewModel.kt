@@ -4,12 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.remote.StockDto
+import com.berdikariintigemilang.pos.data.repository.AuthRepository
 import com.berdikariintigemilang.pos.data.repository.InventoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -19,12 +21,14 @@ data class InventoryUiState(
     val search: String = "",
     val lowStockOnly: Boolean = false,
     val items: List<StockDto> = emptyList(),
+    val isAdmin: Boolean = false,
     val error: String? = null
 )
 
 @HiltViewModel
 class InventoryViewModel @Inject constructor(
-    private val inventoryRepository: InventoryRepository
+    private val inventoryRepository: InventoryRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(InventoryUiState())
@@ -32,7 +36,11 @@ class InventoryViewModel @Inject constructor(
 
     private var searchJob: Job? = null
 
-    init { load() }
+    init {
+        viewModelScope.launch {
+            _state.update { it.copy(isAdmin = authRepository.userFlow.first()?.isAdmin ?: false) }
+        }
+    }
 
     fun onSearchChange(q: String) {
         _state.update { it.copy(search = q) }

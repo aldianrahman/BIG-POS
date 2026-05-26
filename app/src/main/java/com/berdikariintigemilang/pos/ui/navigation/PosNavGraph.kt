@@ -12,6 +12,7 @@ import androidx.navigation.navArgument
 import com.berdikariintigemilang.pos.ui.auth.LoginScreen
 import com.berdikariintigemilang.pos.ui.main.AppViewModel
 import com.berdikariintigemilang.pos.ui.inventory.ProductDetailScreen
+import com.berdikariintigemilang.pos.ui.inventory.ProductEditScreen
 import com.berdikariintigemilang.pos.ui.main.MainScreen
 import com.berdikariintigemilang.pos.ui.pos.PaymentScreen
 import com.berdikariintigemilang.pos.ui.pos.ProductSearchScreen
@@ -82,7 +83,8 @@ fun PosNavGraph(
                 onSearch = { navController.navigate(Routes.PRODUCT_SEARCH) },
                 onCheckout = { navController.navigate(Routes.PAYMENT) },
                 onProductClick = { productId -> navController.navigate(Routes.productDetail(productId)) },
-                onTransactions = { navController.navigate(Routes.TRANSACTIONS) }
+                onTransactions = { navController.navigate(Routes.TRANSACTIONS) },
+                onAddProduct = { navController.navigate(Routes.productEdit(0)) }
             )
         }
 
@@ -97,7 +99,20 @@ fun PosNavGraph(
             route = Routes.PRODUCT_DETAIL,
             arguments = listOf(navArgument("productId") { type = NavType.StringType })
         ) {
-            ProductDetailScreen(onBack = { navController.popBackStack() })
+            ProductDetailScreen(
+                onBack = { navController.popBackStack() },
+                onEdit = { productId -> navController.navigate(Routes.productEdit(productId)) }
+            )
+        }
+
+        composable(
+            route = Routes.PRODUCT_EDIT,
+            arguments = listOf(navArgument("productId") { type = NavType.StringType })
+        ) {
+            ProductEditScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
         }
 
         composable(Routes.SCAN) {

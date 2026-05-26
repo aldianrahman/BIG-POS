@@ -40,5 +40,6 @@ data class ProductRequest(
     val unit: String = "PCS",
     val purchasePrice: Double = 0.0,
     val sellingPrice: Double = 0.0,
-    val minStock: Int? = null
+    val minStock: Int? = null,
+    val initialStock: Int? = null
 )
