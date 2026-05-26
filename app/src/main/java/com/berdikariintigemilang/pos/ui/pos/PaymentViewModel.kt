@@ -6,6 +6,7 @@ import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.remote.TransactionItemRequest
 import com.berdikariintigemilang.pos.data.remote.TransactionRequest
+import com.berdikariintigemilang.pos.data.repository.BundleRepository
 import com.berdikariintigemilang.pos.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -18,6 +19,9 @@ import java.util.UUID
 import javax.inject.Inject
 
 data class PaymentUiState(
+    val subtotal: Double = 0.0,
+    val discount: Double = 0.0,
+    val bundleDiscount: Double = 0.0,
     val total: Double = 0.0,
     val cash: Long = 0,
     val submitting: Boolean = false,
@@ -30,23 +34,42 @@ data class PaymentUiState(
 @HiltViewModel
 class PaymentViewModel @Inject constructor(
     private val cartManager: CartManager,
-    private val transactionRepository: TransactionRepository
+    private val transactionRepository: TransactionRepository,
+    private val bundleRepository: BundleRepository
 ) : ViewModel() {
 
     // Idempotency key tetap selama layar ini hidup (retry aman tak dobel).
     private val idempotencyKey = UUID.randomUUID().toString()
 
-    private val _state = MutableStateFlow(
-        PaymentUiState(total = computeTotal())
-    )
+    private val _state = MutableStateFlow(initialState())
     val state: StateFlow<PaymentUiState> = _state
 
     private val _success = Channel<Long>(Channel.BUFFERED)
     val success = _success.receiveAsFlow()
 
-    private fun computeTotal(): Double {
+    init {
+        // Ambil potongan bundle dari server agar total yang ditagih sudah benar.
+        viewModelScope.launch {
+            val lines = cartManager.lines.value
+            if (lines.isNotEmpty()) {
+                (bundleRepository.calculate(lines) as? ApiResult.Success)?.let { res ->
+                    _state.update { st ->
+                        val total = (st.subtotal - st.discount - res.data.bundleDiscount).coerceAtLeast(0.0)
+                        st.copy(bundleDiscount = res.data.bundleDiscount, total = total)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun initialState(): PaymentUiState {
         val subtotal = cartManager.lines.value.sumOf { it.lineSubtotal }
-        return (subtotal - cartManager.discount.value).coerceAtLeast(0.0)
+        val discount = cartManager.discount.value
+        return PaymentUiState(
+            subtotal = subtotal,
+            discount = discount,
+            total = (subtotal - discount).coerceAtLeast(0.0)
+        )
     }
 
     fun appendDigit(d: String) {

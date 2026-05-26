@@ -100,6 +100,8 @@ fun PosScreen(
         CheckoutCard(
             subtotal = state.subtotal,
             discount = state.discount,
+            bundleDiscount = state.bundleDiscount,
+            bundleLabels = state.appliedBundles.map { "${it.name} x${it.count}" },
             total = state.total,
             canCheckout = state.canCheckout,
             onDiscountChange = viewModel::setDiscount,
@@ -169,6 +171,8 @@ private fun CartItemRow(
 private fun CheckoutCard(
     subtotal: Double,
     discount: Double,
+    bundleDiscount: Double,
+    bundleLabels: List<String>,
     total: Double,
     canCheckout: Boolean,
     onDiscountChange: (Double) -> Unit,
@@ -186,6 +190,17 @@ private fun CheckoutCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Subtotal", style = MaterialTheme.typography.bodyLarge)
                 Text(Formatters.rupiah(subtotal), style = MaterialTheme.typography.bodyLarge)
+            }
+            if (bundleDiscount > 0) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Potongan Bundle", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
+                        bundleLabels.forEach {
+                            Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                    Text("-${Formatters.rupiah(bundleDiscount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
+                }
             }
             OutlinedTextField(
                 value = discountText,

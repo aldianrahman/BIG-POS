@@ -63,6 +63,10 @@ fun PaymentScreen(
         ) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (state.bundleDiscount > 0) {
+                        AmountRow("Subtotal", Formatters.rupiah(state.subtotal))
+                        AmountRow("Potongan Bundle", "-" + Formatters.rupiah(state.bundleDiscount), color = MaterialTheme.colorScheme.secondary)
+                    }
                     AmountRow("Total", Formatters.rupiah(state.total), big = true)
                     AmountRow("Uang Diterima", Formatters.rupiah(state.cash))
                     AmountRow(
