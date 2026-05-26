@@ -31,7 +31,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +52,7 @@ fun ProductSearchScreen(
     val state by viewModel.state.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    var selectedProduct by remember { mutableStateOf<ProductDto?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { snackbar.showSnackbar(it) }
@@ -102,7 +105,7 @@ fun ProductSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.items, key = { it.id }) { product ->
-                        ProductRow(product = product, onAdd = { viewModel.addToCart(product) })
+                        ProductRow(product = product, onAdd = { selectedProduct = product })
                     }
                     if (state.loadingMore) {
                         item {
@@ -114,6 +117,19 @@ fun ProductSearchScreen(
                 }
             }
         }
+    }
+
+    selectedProduct?.let { product ->
+        QuantityDialog(
+            productName = product.name,
+            unitPrice = product.sellingPrice,
+            stock = product.stockQuantity,
+            onDismiss = { selectedProduct = null },
+            onConfirm = { qty ->
+                viewModel.addToCart(product, qty)
+                selectedProduct = null
+            }
+        )
     }
 }
 

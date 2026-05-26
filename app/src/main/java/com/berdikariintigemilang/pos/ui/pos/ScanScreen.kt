@@ -31,6 +31,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,22 +61,23 @@ import java.util.concurrent.Executors
 @Composable
 fun ScanScreen(
     onBack: () -> Unit,
-    onProductAdded: () -> Unit,
     viewModel: ScanViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
     LaunchedEffect(Unit) {
         if (!cameraPermission.status.isGranted) cameraPermission.launchPermissionRequest()
     }
 
+    // Item masuk keranjang: beep + getar (tetap di layar scan).
     LaunchedEffect(Unit) {
-        viewModel.added.collect {
-            scanFeedback(context)
-            onProductAdded()
-        }
+        viewModel.added.collect { scanFeedback(context) }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { snackbar.showSnackbar(it) }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -111,6 +114,19 @@ fun ScanScreen(
                 color = Color.White
             )
         }
+
+        SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp))
+    }
+
+    // Dialog konfirmasi jumlah setelah barcode terbaca.
+    state.pendingProduct?.let { product ->
+        QuantityDialog(
+            productName = product.name,
+            unitPrice = product.sellingPrice,
+            stock = product.stockQuantity,
+            onDismiss = viewModel::cancelPending,
+            onConfirm = { qty -> viewModel.confirmAdd(qty) }
+        )
     }
 
     state.notFoundCode?.let { msg ->

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.cart.CartManager
+import com.berdikariintigemilang.pos.data.remote.ProductDto
 import com.berdikariintigemilang.pos.data.repository.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -16,6 +17,7 @@ import javax.inject.Inject
 
 data class ScanState(
     val loading: Boolean = false,
+    val pendingProduct: ProductDto? = null,
     val notFoundCode: String? = null,
     val error: String? = null
 )
@@ -29,44 +31,62 @@ class ScanViewModel @Inject constructor(
     private val _state = MutableStateFlow(ScanState())
     val state: StateFlow<ScanState> = _state
 
-    // Event nama produk yang berhasil ditambahkan (untuk vibrate + kembali ke POS).
-    private val _added = Channel<String>(Channel.BUFFERED)
+    // Event ketika item benar-benar masuk keranjang (untuk beep + getar).
+    private val _added = Channel<Unit>(Channel.BUFFERED)
     val added = _added.receiveAsFlow()
+
+    // Pesan singkat untuk snackbar.
+    private val _messages = Channel<String>(Channel.BUFFERED)
+    val messages = _messages.receiveAsFlow()
 
     @Volatile
     private var processing = false
 
     fun onBarcode(code: String) {
-        if (processing || _state.value.notFoundCode != null) return
+        // Abaikan bila sedang proses / dialog produk atau "tidak ditemukan" terbuka.
+        if (processing || _state.value.pendingProduct != null || _state.value.notFoundCode != null) return
         processing = true
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             when (val res = productRepository.byBarcode(code)) {
                 is ApiResult.Success -> {
-                    val ok = cartManager.addProduct(res.data)
-                    _state.update { it.copy(loading = false) }
-                    if (ok) {
-                        _added.send(res.data.name)
-                    } else {
-                        _state.update { it.copy(notFoundCode = "Stok ${res.data.name} habis") }
-                    }
+                    // Tampilkan dialog konfirmasi jumlah (belum ditambah ke keranjang).
+                    _state.update { it.copy(loading = false, pendingProduct = res.data) }
                 }
                 is ApiResult.Error -> {
-                    _state.update {
-                        it.copy(
-                            loading = false,
-                            notFoundCode = if (res.httpStatus == 404) "Produk barcode $code tidak ditemukan" else null,
-                            error = if (res.httpStatus == 404) null else res.message
-                        )
+                    if (res.httpStatus == 404) {
+                        _state.update { it.copy(loading = false, notFoundCode = "Produk barcode $code tidak ditemukan") }
+                    } else {
+                        _state.update { it.copy(loading = false, error = res.message) }
+                        processing = false // izinkan scan ulang
                     }
-                    // error jaringan: izinkan scan ulang
-                    if (res.httpStatus != 404) processing = false
                 }
             }
         }
     }
 
-    /** Tutup dialog & izinkan scan lagi. */
+    /** Konfirmasi tambah dari dialog. Tetap di layar scan agar bisa lanjut scan. */
+    fun confirmAdd(quantity: Int) {
+        val product = _state.value.pendingProduct ?: return
+        val ok = cartManager.addProduct(product, quantity)
+        _state.update { it.copy(pendingProduct = null) }
+        processing = false
+        viewModelScope.launch {
+            if (ok) {
+                _added.send(Unit)
+                _messages.send("${product.name} +$quantity ditambahkan")
+            } else {
+                _messages.send("Stok ${product.name} tidak mencukupi")
+            }
+        }
+    }
+
+    fun cancelPending() {
+        _state.update { it.copy(pendingProduct = null) }
+        processing = false
+    }
+
+    /** Tutup dialog "tidak ditemukan"/error & izinkan scan lagi. */
     fun dismissDialog() {
         _state.update { it.copy(notFoundCode = null, error = null) }
         processing = false

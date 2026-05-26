@@ -32,25 +32,30 @@ class CartManager @Inject constructor() {
     private val _discount = MutableStateFlow(0.0)
     val discount: StateFlow<Double> = _discount.asStateFlow()
 
-    /** Tambah produk; bila sudah ada, qty +1 (dibatasi stok). Return false bila stok habis. */
-    fun addProduct(product: ProductDto): Boolean {
+    /**
+     * Tambah produk sebanyak [quantity] (akumulatif bila sudah ada di keranjang).
+     * Return false bila melebihi stok tersedia.
+     */
+    fun addProduct(product: ProductDto, quantity: Int = 1): Boolean {
+        if (quantity < 1) return false
         val stock = product.stockQuantity ?: Int.MAX_VALUE
         var added = true
         _lines.update { current ->
             val existing = current.find { it.productId == product.id }
             if (existing == null) {
-                if (stock < 1) { added = false; return@update current }
+                if (quantity > stock) { added = false; return@update current }
                 current + CartLine(
                     productId = product.id,
                     sku = product.sku,
                     name = product.name,
                     unitPrice = product.sellingPrice,
-                    quantity = 1,
+                    quantity = quantity,
                     stock = stock
                 )
             } else {
-                if (existing.quantity + 1 > stock) { added = false; return@update current }
-                current.map { if (it.productId == product.id) it.copy(quantity = it.quantity + 1) else it }
+                val newQty = existing.quantity + quantity
+                if (newQty > stock) { added = false; return@update current }
+                current.map { if (it.productId == product.id) it.copy(quantity = newQty) else it }
             }
         }
         return added

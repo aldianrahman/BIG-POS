@@ -92,10 +92,7 @@ fun PosNavGraph(
         }
 
         composable(Routes.SCAN) {
-            ScanScreen(
-                onBack = { navController.popBackStack() },
-                onProductAdded = { navController.popBackStack() }
-            )
+            ScanScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.PRODUCT_SEARCH) {

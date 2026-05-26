@@ -84,10 +84,10 @@ class ProductSearchViewModel @Inject constructor(
         if (!s.loading && !s.loadingMore && s.hasMore) load(reset = false)
     }
 
-    fun addToCart(product: ProductDto) {
-        val ok = cartManager.addProduct(product)
+    fun addToCart(product: ProductDto, quantity: Int) {
+        val ok = cartManager.addProduct(product, quantity)
         viewModelScope.launch {
-            _messages.send(if (ok) "${product.name} ditambahkan" else "Stok ${product.name} tidak mencukupi")
+            _messages.send(if (ok) "${product.name} +$quantity ditambahkan" else "Stok ${product.name} tidak mencukupi")
         }
     }
 }
