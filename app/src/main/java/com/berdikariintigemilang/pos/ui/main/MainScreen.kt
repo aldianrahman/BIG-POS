@@ -45,7 +45,10 @@ private fun iconFor(tab: MainTab): TabIcon = when (tab) {
 @Composable
 fun MainScreen(
     onCloseShift: (Long) -> Unit,
-    onLoggedOut: () -> Unit
+    onLoggedOut: () -> Unit,
+    onScan: () -> Unit = {},
+    onSearch: () -> Unit = {},
+    onCheckout: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.POS) }
 
@@ -71,7 +74,12 @@ fun MainScreen(
     ) { padding ->
         val contentModifier = Modifier.padding(padding)
         when (selectedTab) {
-            MainTab.POS -> PosScreen(contentModifier)
+            MainTab.POS -> PosScreen(
+                modifier = contentModifier,
+                onScanClick = onScan,
+                onSearchClick = onSearch,
+                onCheckout = onCheckout
+            )
             MainTab.INVENTORY -> InventoryScreen(contentModifier)
             MainTab.DASHBOARD -> DashboardScreen(contentModifier)
             MainTab.REPORTS -> ReportsScreen(contentModifier)

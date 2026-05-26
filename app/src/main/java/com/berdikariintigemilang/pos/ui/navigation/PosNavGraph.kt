@@ -12,6 +12,10 @@ import androidx.navigation.navArgument
 import com.berdikariintigemilang.pos.ui.auth.LoginScreen
 import com.berdikariintigemilang.pos.ui.main.AppViewModel
 import com.berdikariintigemilang.pos.ui.main.MainScreen
+import com.berdikariintigemilang.pos.ui.pos.PaymentScreen
+import com.berdikariintigemilang.pos.ui.pos.ProductSearchScreen
+import com.berdikariintigemilang.pos.ui.pos.ReceiptScreen
+import com.berdikariintigemilang.pos.ui.pos.ScanScreen
 import com.berdikariintigemilang.pos.ui.shift.ShiftCloseScreen
 import com.berdikariintigemilang.pos.ui.shift.ShiftOpenScreen
 import com.berdikariintigemilang.pos.ui.shift.ZReportScreen
@@ -71,8 +75,42 @@ fun PosNavGraph(
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onScan = { navController.navigate(Routes.SCAN) },
+                onSearch = { navController.navigate(Routes.PRODUCT_SEARCH) },
+                onCheckout = { navController.navigate(Routes.PAYMENT) }
+            )
+        }
+
+        composable(Routes.SCAN) {
+            ScanScreen(
+                onBack = { navController.popBackStack() },
+                onProductAdded = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.PRODUCT_SEARCH) {
+            ProductSearchScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.PAYMENT) {
+            PaymentScreen(
+                onBack = { navController.popBackStack() },
+                onPaid = { trxId ->
+                    navController.navigate(Routes.receipt(trxId)) {
+                        popUpTo(Routes.PAYMENT) { inclusive = true }
+                    }
                 }
             )
+        }
+
+        composable(
+            route = Routes.RECEIPT,
+            arguments = listOf(navArgument("trxId") { type = NavType.StringType })
+        ) {
+            ReceiptScreen(onDone = {
+                navController.popBackStack(Routes.MAIN, inclusive = false)
+            })
         }
 
         composable(

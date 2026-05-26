@@ -2,8 +2,10 @@ package com.berdikariintigemilang.pos.data.remote
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
 
@@ -29,4 +31,26 @@ interface ApiService {
 
     @GET("api/pos/shifts/{id}/z-report")
     suspend fun zReport(@Path("id") id: Long): PosApiResponse<ZReportDto>
+
+    // ===== Products =====
+    @GET("api/pos/products")
+    suspend fun searchProducts(
+        @Query("search") search: String?,
+        @Query("categoryId") categoryId: Long?,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): PosApiResponse<PageDto<ProductDto>>
+
+    @GET("api/pos/products/barcode/{barcode}")
+    suspend fun productByBarcode(@Path("barcode") barcode: String): PosApiResponse<ProductDto>
+
+    // ===== Transactions =====
+    @POST("api/pos/transactions")
+    suspend fun createTransaction(
+        @Header("X-Idempotency-Key") idempotencyKey: String,
+        @Body body: TransactionRequest
+    ): PosApiResponse<TransactionDto>
+
+    @GET("api/pos/transactions/{id}/receipt")
+    suspend fun receipt(@Path("id") id: Long): PosApiResponse<ReceiptDto>
 }
