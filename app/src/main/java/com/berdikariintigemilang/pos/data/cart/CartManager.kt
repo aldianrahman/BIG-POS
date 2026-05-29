@@ -15,10 +15,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.lang.reflect.Type
@@ -39,6 +41,9 @@ data class CartLine(
     val lineSubtotal: Double get() = unitPrice * quantity
 }
 
+/** Cara input diskon: nominal Rupiah atau persentase dari subtotal. */
+enum class DiscountMode { RUPIAH, PERCENT }
+
 /**
  * Keranjang yang dibagikan lintas layar POS (single cashier device).
  *
@@ -58,23 +63,45 @@ class CartManager @Inject constructor(
 
     private object Keys {
         val LINES = stringPreferencesKey("cart_lines")
-        val DISCOUNT = doublePreferencesKey("cart_discount")
+        val DISCOUNT_INPUT = doublePreferencesKey("cart_discount_input")
+        val DISCOUNT_MODE = stringPreferencesKey("cart_discount_mode")
     }
 
     private val _lines = MutableStateFlow<List<CartLine>>(emptyList())
     val lines: StateFlow<List<CartLine>> = _lines.asStateFlow()
 
-    private val _discount = MutableStateFlow(0.0)
-    val discount: StateFlow<Double> = _discount.asStateFlow()
+    /** Mode input diskon (Rp atau %). */
+    private val _discountMode = MutableStateFlow(DiscountMode.RUPIAH)
+    val discountMode: StateFlow<DiscountMode> = _discountMode.asStateFlow()
+
+    /** Nilai mentah yang diketik kasir (Rupiah pada mode RUPIAH, atau persen pada mode PERCENT). */
+    private val _discountInput = MutableStateFlow(0.0)
+    val discountInput: StateFlow<Double> = _discountInput.asStateFlow()
+
+    /** Diskon nominal (Rp) hasil hitung dari mode+input, dibatasi 0..subtotal. */
+    val discount: StateFlow<Double> =
+        combine(_lines, _discountMode, _discountInput) { lines, mode, input ->
+            nominalDiscount(lines.sumOf { it.lineSubtotal }, mode, input)
+        }.stateIn(scope, SharingStarted.Eagerly, 0.0)
 
     init {
         scope.launch {
             // Pulihkan dulu isi keranjang tersimpan SEBELUM mulai menyimpan
             // perubahan, agar state kosong awal tidak menimpa data tersimpan.
             restore()
-            combine(_lines, _discount) { lines, discount -> lines to discount }
-                .collect { (lines, discount) -> persist(lines, discount) }
+            combine(_lines, _discountMode, _discountInput) { lines, mode, input ->
+                Triple(lines, mode, input)
+            }.collect { (lines, mode, input) -> persist(lines, mode, input) }
         }
+    }
+
+    /** Hitung diskon nominal (Rp) dari mode+input, dibatasi maksimal subtotal. */
+    private fun nominalDiscount(subtotal: Double, mode: DiscountMode, input: Double): Double {
+        val raw = when (mode) {
+            DiscountMode.PERCENT -> subtotal * (input.coerceIn(0.0, 100.0) / 100.0)
+            DiscountMode.RUPIAH -> input
+        }
+        return raw.coerceIn(0.0, subtotal)
     }
 
     private suspend fun restore() {
@@ -83,13 +110,17 @@ class CartManager @Inject constructor(
             runCatching { linesAdapter.fromJson(json) }.getOrNull()
         } ?: emptyList()
         _lines.value = saved
-        _discount.value = prefs[Keys.DISCOUNT] ?: 0.0
+        _discountInput.value = prefs[Keys.DISCOUNT_INPUT] ?: 0.0
+        _discountMode.value = runCatching {
+            DiscountMode.valueOf(prefs[Keys.DISCOUNT_MODE] ?: DiscountMode.RUPIAH.name)
+        }.getOrDefault(DiscountMode.RUPIAH)
     }
 
-    private suspend fun persist(lines: List<CartLine>, discount: Double) {
+    private suspend fun persist(lines: List<CartLine>, mode: DiscountMode, input: Double) {
         context.cartDataStore.edit { prefs ->
             prefs[Keys.LINES] = linesAdapter.toJson(lines)
-            prefs[Keys.DISCOUNT] = discount
+            prefs[Keys.DISCOUNT_INPUT] = input
+            prefs[Keys.DISCOUNT_MODE] = mode.name
         }
     }
 
@@ -135,12 +166,19 @@ class CartManager @Inject constructor(
         _lines.update { it.filterNot { line -> line.productId == productId } }
     }
 
-    fun setDiscount(amount: Double) {
-        _discount.value = amount.coerceAtLeast(0.0)
+    fun setDiscountMode(mode: DiscountMode) {
+        _discountMode.value = mode
+        // Ganti mode mereset nilai agar tak salah tafsir (mis. 5000 jadi 5000%).
+        _discountInput.value = 0.0
+    }
+
+    fun setDiscountInput(value: Double) {
+        _discountInput.value = value.coerceAtLeast(0.0)
     }
 
     fun clear() {
         _lines.value = emptyList()
-        _discount.value = 0.0
+        _discountInput.value = 0.0
+        _discountMode.value = DiscountMode.RUPIAH
     }
 }

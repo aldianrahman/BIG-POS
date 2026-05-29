@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.util.Formatters
 import com.berdikariintigemilang.pos.data.cart.CartLine
+import com.berdikariintigemilang.pos.data.cart.DiscountMode
 import com.berdikariintigemilang.pos.ui.components.EmptyState
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
 
@@ -199,13 +200,16 @@ fun PosScreen(
         CheckoutSection(
             subtotal = state.subtotal,
             discount = state.discount,
+            discountMode = state.discountMode,
+            discountInput = state.discountInput,
             bundleDiscount = state.bundleDiscount,
             bundleLabels = state.appliedBundles.map { "${it.name} x${it.count}" },
             taxAmount = state.taxAmount,
             taxInclusive = state.taxInclusive,
             total = state.total,
             canCheckout = state.canCheckout,
-            onDiscountChange = viewModel::setDiscount,
+            onDiscountInputChange = viewModel::setDiscountInput,
+            onDiscountModeChange = viewModel::setDiscountMode,
             onCheckout = onCheckout
         )
     }
@@ -344,13 +348,16 @@ private fun StepButton(icon: ImageVector, desc: String, tint: androidx.compose.u
 private fun CheckoutSection(
     subtotal: Double,
     discount: Double,
+    discountMode: DiscountMode,
+    discountInput: Double,
     bundleDiscount: Double,
     bundleLabels: List<String>,
     taxAmount: Double,
     taxInclusive: Boolean,
     total: Double,
     canCheckout: Boolean,
-    onDiscountChange: (Double) -> Unit,
+    onDiscountInputChange: (Double) -> Unit,
+    onDiscountModeChange: (DiscountMode) -> Unit,
     onCheckout: () -> Unit
 ) {
     Surface(
@@ -377,7 +384,13 @@ private fun CheckoutSection(
                     Text("-${Formatters.rupiah(bundleDiscount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
                 }
             }
-            DiscountField(discount = discount, onDiscountChange = onDiscountChange)
+            DiscountField(
+                mode = discountMode,
+                input = discountInput,
+                discount = discount,
+                onInputChange = onDiscountInputChange,
+                onModeChange = onDiscountModeChange
+            )
             if (taxAmount > 0) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (taxInclusive) "PPN (termasuk)" else "PPN", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -408,14 +421,20 @@ private fun CheckoutSection(
     }
 }
 
-/** Kotak diskon ber-isi abu lembut dengan ikon label & input angka rata-kanan. */
+/** Kotak diskon dengan toggle Rp/%, input angka, dan info potongan saat mode %. */
 @Composable
-private fun DiscountField(discount: Double, onDiscountChange: (Double) -> Unit) {
-    var text by remember { mutableStateOf(if (discount > 0) discount.toLong().toString() else "") }
-    // Sinkronkan bila diskon direset dari luar (mis. tombol "Kosongkan").
-    LaunchedEffect(discount) {
-        val expected = if (discount > 0) discount.toLong().toString() else ""
-        if ((text.toDoubleOrNull() ?: 0.0) != discount) text = expected
+private fun DiscountField(
+    mode: DiscountMode,
+    input: Double,
+    discount: Double,
+    onInputChange: (Double) -> Unit,
+    onModeChange: (DiscountMode) -> Unit
+) {
+    var text by remember { mutableStateOf(formatDiscountInput(input)) }
+    // Sinkronkan bila nilai direset dari luar (ganti mode / "Kosongkan").
+    LaunchedEffect(input) {
+        val expected = formatDiscountInput(input)
+        if ((text.toDoubleOrNull() ?: 0.0) != input) text = expected
     }
 
     Surface(
@@ -423,49 +442,113 @@ private fun DiscountField(discount: Double, onDiscountChange: (Double) -> Unit) 
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(
-                Icons.Outlined.LocalOffer,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text("Diskon", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.weight(1f))
-            Text("Rp", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(8.dp))
-            BasicTextField(
-                value = text,
-                onValueChange = { v ->
-                    val digits = v.filter { it.isDigit() }.take(12)
-                    text = digits
-                    onDiscountChange(digits.toDoubleOrNull() ?: 0.0)
-                },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.titleMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.End
-                ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.width(96.dp)
-            ) { inner ->
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    if (text.isEmpty()) {
-                        Text(
-                            "0",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.LocalOffer,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Diskon", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.width(10.dp))
+                DiscountModeToggle(mode = mode, onChange = onModeChange)
+                Spacer(Modifier.weight(1f))
+                BasicTextField(
+                    value = text,
+                    onValueChange = { v ->
+                        val digits = v.filter { it.isDigit() }
+                        val limited = if (mode == DiscountMode.PERCENT)
+                            (digits.toIntOrNull()?.coerceAtMost(100)?.toString() ?: "")
+                        else digits.take(12)
+                        text = limited
+                        onInputChange(limited.toDoubleOrNull() ?: 0.0)
+                    },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width(76.dp)
+                ) { inner ->
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        if (text.isEmpty()) {
+                            Text(
+                                "0",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        inner()
                     }
-                    inner()
                 }
+                if (mode == DiscountMode.PERCENT) {
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        "%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            val hint = when {
+                mode == DiscountMode.PERCENT && discount > 0 -> "Potongan ${Formatters.rupiah(discount)}"
+                mode == DiscountMode.RUPIAH && input > discount -> "Maks. ${Formatters.rupiah(discount)}"
+                else -> null
+            }
+            hint?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
+
+@Composable
+private fun DiscountModeToggle(mode: DiscountMode, onChange: (DiscountMode) -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        DiscountModeCell("Rp", mode == DiscountMode.RUPIAH) { onChange(DiscountMode.RUPIAH) }
+        DiscountModeCell("%", mode == DiscountMode.PERCENT) { onChange(DiscountMode.PERCENT) }
+    }
+}
+
+@Composable
+private fun DiscountModeCell(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(7.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun formatDiscountInput(value: Double): String =
+    if (value > 0) value.toLong().toString() else ""
