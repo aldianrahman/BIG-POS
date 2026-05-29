@@ -54,6 +54,9 @@ fun LoginScreen(
     var showPassword by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        viewModel.prefillFromSaved()
+    }
+    LaunchedEffect(Unit) {
         viewModel.loginSuccess.collect { onLoggedIn() }
     }
 

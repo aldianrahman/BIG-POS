@@ -49,7 +49,8 @@ class AuthRepository @Inject constructor(
         }
 
         // Simpan kredensial valid agar form login bisa terisi otomatis nanti.
-        credentialStore.save(username.trim(), password)
+        // Dibungkus agar kegagalan tulis tak pernah menggagalkan proses login.
+        runCatching { credentialStore.save(username.trim(), password) }
 
         // 3) Simpan token lebih dulu agar /me terotentikasi.
         sessionStore.saveToken(loginRes.accessToken)

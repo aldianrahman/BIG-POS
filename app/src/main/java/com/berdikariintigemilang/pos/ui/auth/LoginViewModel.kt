@@ -32,9 +32,12 @@ class LoginViewModel @Inject constructor(
     private val _loginSuccess = Channel<Unit>(Channel.BUFFERED)
     val loginSuccess = _loginSuccess.receiveAsFlow()
 
-    init {
-        // Isi otomatis username & password dari login terakhir yang berhasil
-        // (membantu kasir yang lupa kredensialnya).
+    /**
+     * Isi otomatis username & password dari login terakhir yang berhasil
+     * (membantu kasir yang lupa kredensialnya). Dipanggil saat layar login
+     * tampil; tidak menimpa bila user sudah mulai mengetik.
+     */
+    fun prefillFromSaved() {
         viewModelScope.launch {
             authRepository.savedCredentials()?.let { c ->
                 _state.update { cur ->
