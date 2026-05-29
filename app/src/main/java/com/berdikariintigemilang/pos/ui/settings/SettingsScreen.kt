@@ -2,19 +2,20 @@ package com.berdikariintigemilang.pos.ui.settings
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,23 +23,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Print
-import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,17 +47,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.berdikariintigemilang.pos.ui.components.AppCard
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
-import com.berdikariintigemilang.pos.ui.components.SectionTitle
-import com.berdikariintigemilang.pos.ui.components.StatusChip
+import com.berdikariintigemilang.pos.ui.components.ScreenHeader
+import com.berdikariintigemilang.pos.ui.components.SectionLabel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
-@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onCloseShift: (Long) -> Unit,
@@ -74,16 +73,12 @@ fun SettingsScreen(
     var showPickerDialog by remember { mutableStateOf(false) }
 
     val needsBtPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    // Android 12+: connect butuh BLUETOOTH_CONNECT, dan cancelDiscovery saat
-    // menyambung printer butuh BLUETOOTH_SCAN.
     val btPermissions = rememberMultiplePermissionsState(
         listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
     )
-    // Aksi yang menunggu izin BT diberikan.
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
-
     LaunchedEffect(btPermissions.allPermissionsGranted) {
         if (btPermissions.allPermissionsGranted) {
             pendingAction?.invoke()
@@ -96,99 +91,40 @@ fun SettingsScreen(
         else { pendingAction = action; btPermissions.launchMultiplePermissionRequest() }
     }
 
-    Scaffold(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Pengaturan", style = MaterialTheme.typography.titleLarge) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            // ── Profil pengguna ──────────────────────────────────────────────
-            AppCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            state.user?.fullName ?: "-",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            "@${state.user?.username ?: "-"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        val roles = state.user?.roles?.joinToString(", ") { it.removePrefix("ROLE_") } ?: ""
-                        if (roles.isNotBlank()) {
-                            StatusChip(
-                                text = roles,
-                                container = MaterialTheme.colorScheme.primaryContainer,
-                                content = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
+    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            ScreenHeader(title = "Pengaturan")
 
-            // ── Perangkat ────────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionTitle(
-                    title = "Perangkat",
-                    icon = Icons.Filled.Bluetooth
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                ProfileCard(
+                    name = state.user?.fullName ?: "-",
+                    username = state.user?.username ?: "-",
+                    roles = state.user?.roles?.map { it.removePrefix("ROLE_") } ?: emptyList()
                 )
-                AppCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+
+                // ── Perangkat ───────────────────────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel("Perangkat")
+                    SettingsCard {
                         SettingsRow(
                             icon = Icons.Filled.Print,
-                            iconTint = MaterialTheme.colorScheme.primary,
-                            iconBackground = MaterialTheme.colorScheme.primaryContainer,
                             title = "Pilih Printer (Bluetooth)",
-                            subtitle = state.savedPrinter?.let { "${it.name}  •  ${it.address}" }
+                            subtitle = state.savedPrinter?.let { "${it.name} · ${it.address}" }
                                 ?: "Belum ada printer dipilih",
                             subtitleColor = if (state.savedPrinter != null)
-                                MaterialTheme.colorScheme.secondary
-                            else
-                                MaterialTheme.colorScheme.outline,
+                                MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = { withBt { viewModel.loadPairedDevices(); showPickerDialog = true } }
                         )
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            modifier = Modifier.padding(horizontal = 0.dp)
-                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                         SettingsRow(
-                            icon = Icons.Filled.Print,
-                            iconTint = MaterialTheme.colorScheme.secondary,
-                            iconBackground = MaterialTheme.colorScheme.secondaryContainer,
+                            icon = Icons.Filled.Bluetooth,
                             title = if (state.printing) "Mencetak..." else "Test Print",
                             subtitle = "Cetak halaman uji ke printer terpilih",
                             enabled = state.savedPrinter != null && !state.printing,
@@ -196,77 +132,52 @@ fun SettingsScreen(
                         )
                     }
                 }
-            }
 
-            // ── Transaksi ────────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionTitle(title = "Transaksi", icon = Icons.Filled.Receipt)
-                AppCard(onClick = onTransactions) {
-                    SettingsRowContent(
-                        icon = Icons.Filled.Receipt,
-                        iconTint = MaterialTheme.colorScheme.tertiary,
-                        iconBackground = MaterialTheme.colorScheme.tertiaryContainer,
-                        title = "Riwayat Transaksi & Cetak Ulang",
-                        subtitle = "Lihat dan cetak ulang transaksi lama"
+                // ── Transaksi ───────────────────────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel("Transaksi")
+                    SettingsCard {
+                        SettingsRow(
+                            icon = Icons.Filled.History,
+                            title = "Riwayat Transaksi & Cetak Ulang",
+                            subtitle = "Lihat & cetak ulang transaksi lama",
+                            onClick = onTransactions
+                        )
+                    }
+                }
+
+                // ── Shift ───────────────────────────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel("Shift")
+                    val shiftId = state.currentShiftId
+                    PrimaryButton(
+                        text = "TUTUP SHIFT",
+                        modifier = Modifier.fillMaxWidth(),
+                        loading = state.loadingShift,
+                        enabled = shiftId != null && !state.loadingShift,
+                        icon = Icons.Filled.PointOfSale,
+                        onClick = { shiftId?.let(onCloseShift) }
                     )
                 }
-            }
 
-            // ── Shift ────────────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionTitle(title = "Shift", icon = Icons.Filled.PointOfSale)
-                val shiftId = state.currentShiftId
-                PrimaryButton(
-                    text = "TUTUP SHIFT",
-                    modifier = Modifier.fillMaxWidth(),
-                    loading = state.loadingShift,
-                    enabled = shiftId != null && !state.loadingShift,
-                    icon = Icons.Filled.PointOfSale,
-                    onClick = { shiftId?.let(onCloseShift) }
-                )
-            }
-
-            // ── Akun ─────────────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionTitle(title = "Akun")
-                AppCard(onClick = { showLogoutConfirm = true }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Text(
-                            "Logout",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            Icons.Filled.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
+                // ── Akun ────────────────────────────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel("Akun")
+                    SettingsCard {
+                        SettingsRow(
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            title = "Logout",
+                            titleColor = MaterialTheme.colorScheme.error,
+                            iconTint = MaterialTheme.colorScheme.error,
+                            iconBackground = MaterialTheme.colorScheme.errorContainer,
+                            onClick = { showLogoutConfirm = true }
                         )
                     }
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
         }
+
+        SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter))
     }
 
     if (showPickerDialog) {
@@ -317,14 +228,80 @@ fun SettingsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProfileCard(name: String, username: String, roles: List<String>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Outlined.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("@$username", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (roles.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        roles.forEach { RoleChip(it) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoleChip(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun SettingsCard(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) { content() }
+    }
+}
+
 @Composable
 private fun SettingsRow(
     icon: ImageVector,
-    iconTint: androidx.compose.ui.graphics.Color,
-    iconBackground: androidx.compose.ui.graphics.Color,
     title: String,
     subtitle: String? = null,
-    subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    iconBackground: Color = MaterialTheme.colorScheme.surfaceVariant,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
@@ -332,64 +309,35 @@ private fun SettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        SettingsRowContent(
-            icon = icon,
-            iconTint = if (enabled) iconTint else MaterialTheme.colorScheme.outline,
-            iconBackground = if (enabled) iconBackground else MaterialTheme.colorScheme.surfaceVariant,
-            title = title,
-            subtitle = subtitle,
-            subtitleColor = subtitleColor,
-            showChevron = true
-        )
-    }
-}
-
-@Composable
-private fun SettingsRowContent(
-    icon: ImageVector,
-    iconTint: androidx.compose.ui.graphics.Color,
-    iconBackground: androidx.compose.ui.graphics.Color,
-    title: String,
-    subtitle: String? = null,
-    subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    showChevron: Boolean = true
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
+            .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(iconBackground),
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (enabled) iconBackground else MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 icon,
                 contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(20.dp)
+                tint = if (enabled) iconTint else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(22.dp)
             )
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if (enabled) titleColor else MaterialTheme.colorScheme.outline)
             subtitle?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = subtitleColor)
             }
         }
-        if (showChevron) {
-            Icon(
-                Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(22.dp)
+        )
     }
 }

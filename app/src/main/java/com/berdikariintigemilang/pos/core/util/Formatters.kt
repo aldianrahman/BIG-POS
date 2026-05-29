@@ -21,6 +21,14 @@ object Formatters {
     fun number(value: Number?): String =
         NumberFormat.getNumberInstance(idLocale).format((value ?: 0).toLong())
 
+    /** Format persen ala id-ID, maksimal 2 desimal, mis. "40,27%" atau "40%". */
+    fun percent(value: Number?): String {
+        val nf = NumberFormat.getNumberInstance(idLocale)
+        nf.maximumFractionDigits = 2
+        nf.minimumFractionDigits = 0
+        return nf.format((value ?: 0).toDouble()) + "%"
+    }
+
     /** Parse ISO-8601 (tanpa zona) dari backend ke tampilan dd/MM/yyyy HH:mm. */
     fun displayDateTime(iso: String?): String {
         if (iso.isNullOrBlank()) return "-"
