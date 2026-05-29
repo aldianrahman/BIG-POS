@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +43,7 @@ import com.berdikariintigemilang.pos.core.util.Formatters
 import com.berdikariintigemilang.pos.data.remote.StockDto
 import com.berdikariintigemilang.pos.data.remote.TopProductDto
 import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
+import com.berdikariintigemilang.pos.ui.components.LineChart
 import com.berdikariintigemilang.pos.ui.components.ScreenHeader
 import com.berdikariintigemilang.pos.ui.components.SoftBadge
 import com.berdikariintigemilang.pos.ui.components.StatTile
@@ -85,6 +88,10 @@ fun DashboardScreen(
                 StatTile("Rata-rata", Formatters.rupiah(s?.avgTransactionValue), Icons.Filled.BarChart, Modifier.weight(1f))
             }
 
+            if (state.salesTrend.isNotEmpty()) {
+                SalesTrendCard(state.salesTrend)
+            }
+
             IconSectionHeader(Icons.Filled.LocalFireDepartment, MaterialTheme.colorScheme.primary, "Produk Terlaris")
             ListCard {
                 if (state.topProducts.isEmpty()) {
@@ -117,6 +124,49 @@ private fun IconSectionHeader(icon: ImageVector, iconTint: androidx.compose.ui.g
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun SalesTrendCard(trend: List<SalesTrendPoint>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Tren Omset", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("7 hari terakhir", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    Formatters.rupiah(trend.sumOf { it.value }),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            if (trend.all { it.value <= 0.0 }) {
+                Text(
+                    "Belum ada penjualan dalam 7 hari terakhir",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            } else {
+                LineChart(
+                    values = trend.map { it.value.toFloat() },
+                    labels = trend.map { it.label }
+                )
+            }
+        }
     }
 }
 
