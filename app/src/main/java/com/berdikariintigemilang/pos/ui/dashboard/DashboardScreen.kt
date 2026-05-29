@@ -43,10 +43,10 @@ import com.berdikariintigemilang.pos.core.util.Formatters
 import com.berdikariintigemilang.pos.data.remote.StockDto
 import com.berdikariintigemilang.pos.data.remote.TopProductDto
 import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
-import com.berdikariintigemilang.pos.ui.components.LineChart
 import com.berdikariintigemilang.pos.ui.components.ScreenHeader
 import com.berdikariintigemilang.pos.ui.components.SoftBadge
 import com.berdikariintigemilang.pos.ui.components.StatTile
+import com.berdikariintigemilang.pos.ui.components.TransactionsChart
 
 @Composable
 fun DashboardScreen(
@@ -88,8 +88,8 @@ fun DashboardScreen(
                 StatTile("Rata-rata", Formatters.rupiah(s?.avgTransactionValue), Icons.Filled.BarChart, Modifier.weight(1f))
             }
 
-            if (state.hourlyTransactions.isNotEmpty()) {
-                HourlyTransactionsCard(state.hourlyTransactions)
+            if (state.todayTransactions.isNotEmpty()) {
+                TodayTransactionsCard(state.todayTransactions)
             }
 
             IconSectionHeader(Icons.Filled.LocalFireDepartment, MaterialTheme.colorScheme.primary, "Produk Terlaris")
@@ -128,8 +128,7 @@ private fun IconSectionHeader(icon: ImageVector, iconTint: androidx.compose.ui.g
 }
 
 @Composable
-private fun HourlyTransactionsCard(points: List<ChartPoint>) {
-    val total = points.sumOf { it.value }.toInt()
+private fun TodayTransactionsCard(points: List<ChartPoint>) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -143,20 +142,21 @@ private fun HourlyTransactionsCard(points: List<ChartPoint>) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Transaksi per Jam", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Hari ini", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Transaksi Hari Ini", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${points.size} transaksi · ketuk titik untuk lihat nilai", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(
-                    "${Formatters.number(total)} transaksi",
+                    Formatters.rupiah(points.sumOf { it.value }),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             Spacer(Modifier.height(14.dp))
-            LineChart(
+            TransactionsChart(
                 values = points.map { it.value.toFloat() },
-                labels = points.map { it.label }
+                labels = points.map { it.label },
+                valueText = { Formatters.rupiah(it) }
             )
         }
     }

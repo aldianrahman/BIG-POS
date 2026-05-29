@@ -6,8 +6,9 @@ import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.remote.DashboardSummaryDto
 import com.berdikariintigemilang.pos.data.remote.StockDto
 import com.berdikariintigemilang.pos.data.remote.TopProductDto
+import com.berdikariintigemilang.pos.data.remote.TransactionDto
 import com.berdikariintigemilang.pos.data.repository.DashboardRepository
-import com.berdikariintigemilang.pos.data.repository.ReportRepository
+import com.berdikariintigemilang.pos.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
-/** Satu titik grafik (label sumbu-x + nilai). */
+/** Satu titik grafik: nilai transaksi + waktu (label sumbu-x). */
 data class ChartPoint(val label: String, val value: Double)
 
 data class DashboardUiState(
@@ -26,14 +27,14 @@ data class DashboardUiState(
     val summary: DashboardSummaryDto? = null,
     val topProducts: List<TopProductDto> = emptyList(),
     val lowStock: List<StockDto> = emptyList(),
-    val hourlyTransactions: List<ChartPoint> = emptyList(),
+    val todayTransactions: List<ChartPoint> = emptyList(),
     val error: String? = null
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val dashboardRepository: DashboardRepository,
-    private val reportRepository: ReportRepository
+    private val transactionRepository: TransactionRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DashboardUiState())
@@ -55,30 +56,39 @@ class DashboardViewModel @Inject constructor(
             (dashboardRepository.lowStock() as? ApiResult.Success)?.let { res ->
                 _state.update { it.copy(lowStock = res.data) }
             }
-            loadHourlyTransactions()
+            loadTodayTransactions()
             _state.update { it.copy(loading = false) }
         }
     }
 
-    /** Jumlah transaksi per jam untuk HARI INI (melihat jam ramai). */
-    private suspend fun loadHourlyTransactions() {
+    /**
+     * Ambil semua transaksi HARI INI (urut pertama → terakhir). Tiap transaksi
+     * menjadi satu titik grafik; nilainya = totalAmount transaksi tersebut.
+     */
+    private suspend fun loadTodayTransactions() {
         val from = LocalDate.now().atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val to = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val rows = (reportRepository.sales(from, to, "hour") as? ApiResult.Success)?.data ?: return
-        val points = rows
-            .sortedBy { hourOf(it.label) ?: Int.MAX_VALUE }
-            .map { row ->
-                val h = hourOf(row.label)
-                val label = if (h != null) "%02d".format(h) else row.label.takeLast(5)
-                ChartPoint(label = label, value = row.totalTransactions.toDouble())
-            }
-        _state.update { it.copy(hourlyTransactions = points) }
-    }
-}
 
-/** Ambil angka jam (0-23) dari label apa pun: "14:00", "...T14", atau "14". */
-private fun hourOf(label: String): Int? {
-    Regex("(\\d{1,2})[:.]\\d{2}").find(label)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
-    Regex("[ T](\\d{1,2})(?!\\d)").find(label)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
-    return label.trim().toIntOrNull()
+        val all = mutableListOf<TransactionDto>()
+        var page = 0
+        while (page < 20) {
+            val res = transactionRepository.list(from, to, page, 100)
+            if (res !is ApiResult.Success) break
+            all += res.data.content
+            if (page >= res.data.totalPages - 1) break
+            page++
+        }
+
+        val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+        val points = all
+            .filter { !it.status.contains("VOID", ignoreCase = true) }
+            .sortedBy { it.id }
+            .map { trx ->
+                val time = trx.createdAt?.let { iso ->
+                    runCatching { LocalDateTime.parse(iso).format(timeFmt) }.getOrNull()
+                } ?: ""
+                ChartPoint(label = time, value = trx.totalAmount)
+            }
+        _state.update { it.copy(todayTransactions = points) }
+    }
 }
