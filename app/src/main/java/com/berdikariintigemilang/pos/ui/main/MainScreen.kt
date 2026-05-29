@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,7 +81,9 @@ fun MainScreen(
             PosBottomBar(selected = selectedTab, onSelect = { selectedTab = it })
         }
     ) { padding ->
-        val contentModifier = Modifier.padding(padding)
+        // consumeWindowInsets agar imePadding di layar anak (mis. Kasir) tidak
+        // menghitung ganda inset bottom-bar saat keyboard muncul.
+        val contentModifier = Modifier.padding(padding).consumeWindowInsets(padding)
         when (selectedTab) {
             MainTab.POS -> PosScreen(
                 modifier = contentModifier,
