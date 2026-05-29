@@ -1,11 +1,14 @@
 package com.berdikariintigemilang.pos.data.repository
 
+import com.berdikariintigemilang.pos.core.datastore.CredentialStore
+import com.berdikariintigemilang.pos.core.datastore.SavedCredentials
 import com.berdikariintigemilang.pos.core.datastore.SessionStore
 import com.berdikariintigemilang.pos.core.datastore.SessionUser
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.network.safePosCall
 import com.berdikariintigemilang.pos.core.util.isAllowedToLogin
 import com.berdikariintigemilang.pos.core.util.isPosAdmin
+import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.remote.ApiService
 import com.berdikariintigemilang.pos.data.remote.LoginRequest
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +20,9 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepository @Inject constructor(
     private val api: ApiService,
-    private val sessionStore: SessionStore
+    private val sessionStore: SessionStore,
+    private val credentialStore: CredentialStore,
+    private val cartManager: CartManager
 ) {
     val userFlow: Flow<SessionUser?> = sessionStore.userFlow
     val tokenFlow: Flow<String?> = sessionStore.tokenFlow
@@ -42,6 +47,9 @@ class AuthRepository @Inject constructor(
         if (!loginRes.roles.isAllowedToLogin()) {
             return ApiResult.Error("Akun ini tidak memiliki akses ke aplikasi POS")
         }
+
+        // Simpan kredensial valid agar form login bisa terisi otomatis nanti.
+        credentialStore.save(username.trim(), password)
 
         // 3) Simpan token lebih dulu agar /me terotentikasi.
         sessionStore.saveToken(loginRes.accessToken)
@@ -80,7 +88,12 @@ class AuthRepository @Inject constructor(
         is ApiResult.Error -> false
     }
 
+    /** Kredensial login terakhir yang berhasil (untuk mengisi form login). */
+    suspend fun savedCredentials(): SavedCredentials? = credentialStore.get()
+
     suspend fun logout() {
         sessionStore.clear()
+        cartManager.clear()
+        // Kredensial sengaja TIDAK dihapus agar form login tetap terisi.
     }
 }
