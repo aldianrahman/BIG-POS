@@ -21,8 +21,6 @@ val OnPosAmberContainer = Color(0xFF3D2A00)
 // ── Netral / permukaan ──────────────────────────────────────────────────────
 val PosBackground = Color(0xFFF6F7F9)
 val PosSurface = Color(0xFFFFFFFF)
-/** Latar lembut bernuansa merek untuk area keranjang pada layar Kasir. */
-val PosCartTint = Color(0xFFFCEEEC)
 val PosSurfaceVariant = Color(0xFFEDEFF3)
 val PosSurfaceContainer = Color(0xFFF1F3F6)
 val PosOnSurface = Color(0xFF1A1C20)

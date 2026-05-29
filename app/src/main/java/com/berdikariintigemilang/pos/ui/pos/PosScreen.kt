@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.PointOfSale
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +61,6 @@ import com.berdikariintigemilang.pos.core.util.Formatters
 import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.ui.components.EmptyState
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
-import com.berdikariintigemilang.pos.ui.theme.PosCartTint
 
 @Composable
 fun PosScreen(
@@ -122,12 +122,14 @@ fun PosScreen(
             }
         }
 
-        // ── Area keranjang (latar lembut bernuansa merek) ───────────────────
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+
+        // ── Area keranjang (latar putih) ────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(PosCartTint)
+                .background(MaterialTheme.colorScheme.surface)
         ) {
             if (state.isEmpty) {
                 EmptyState(
