@@ -24,6 +24,7 @@ data class ChartPoint(val label: String, val value: Double)
 
 data class DashboardUiState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val summary: DashboardSummaryDto? = null,
     val topProducts: List<TopProductDto> = emptyList(),
     val lowStock: List<StockDto> = emptyList(),
@@ -42,9 +43,16 @@ class DashboardViewModel @Inject constructor(
 
     init { load() }
 
-    fun load() {
+    fun load() = fetch(isRefresh = false)
+
+    /** Muat ulang via tarik-ke-bawah (indikator refresh, konten tetap tampil). */
+    fun refresh() = fetch(isRefresh = true)
+
+    private fun fetch(isRefresh: Boolean) {
         val date = LocalDate.now().toString()
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update {
+            if (isRefresh) it.copy(refreshing = true, error = null) else it.copy(loading = true, error = null)
+        }
         viewModelScope.launch {
             when (val summary = dashboardRepository.summary(date)) {
                 is ApiResult.Success -> _state.update { it.copy(summary = summary.data) }
@@ -57,7 +65,7 @@ class DashboardViewModel @Inject constructor(
                 _state.update { it.copy(lowStock = res.data) }
             }
             loadTodayTransactions()
-            _state.update { it.copy(loading = false) }
+            _state.update { it.copy(loading = false, refreshing = false) }
         }
     }
 

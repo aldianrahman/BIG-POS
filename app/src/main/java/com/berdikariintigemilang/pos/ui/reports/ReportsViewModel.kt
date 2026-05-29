@@ -18,6 +18,7 @@ import javax.inject.Inject
 
 data class ReportsUiState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val groupBy: String = "day",
     val rangeLabel: String = "7 hari terakhir",
     val rows: List<SalesReportRowDto> = emptyList(),
@@ -40,11 +41,18 @@ class ReportsViewModel @Inject constructor(
         load()
     }
 
-    fun load() {
+    fun load() = fetch(isRefresh = false)
+
+    /** Muat ulang via tarik-ke-bawah (indikator refresh, konten tetap tampil). */
+    fun refresh() = fetch(isRefresh = true)
+
+    private fun fetch(isRefresh: Boolean) {
         val from = LocalDate.now().minusDays(6).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val to = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val groupBy = _state.value.groupBy
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update {
+            if (isRefresh) it.copy(refreshing = true, error = null) else it.copy(loading = true, error = null)
+        }
         viewModelScope.launch {
             when (val sales = reportRepository.sales(from, to, groupBy)) {
                 is ApiResult.Success -> _state.update { it.copy(rows = sales.data) }
@@ -53,7 +61,7 @@ class ReportsViewModel @Inject constructor(
             (reportRepository.profit(from, to) as? ApiResult.Success)?.let { res ->
                 _state.update { it.copy(profit = res.data) }
             }
-            _state.update { it.copy(loading = false) }
+            _state.update { it.copy(loading = false, refreshing = false) }
         }
     }
 }
