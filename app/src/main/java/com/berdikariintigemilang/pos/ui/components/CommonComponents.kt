@@ -27,17 +27,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.berdikariintigemilang.pos.R
@@ -315,10 +323,50 @@ fun StatTile(
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = valueColor)
+                AutoResizeText(
+                    text = value,
+                    color = valueColor,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    maxFontSize = 24.sp,
+                    minFontSize = 15.sp
+                )
             }
         }
     }
+}
+
+/**
+ * Teks satu baris yang otomatis mengecil agar selalu muat (tidak terpotong /
+ * tidak pindah baris) — mis. nominal Rupiah jutaan pada kartu metrik.
+ */
+@Composable
+private fun AutoResizeText(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    maxFontSize: TextUnit,
+    minFontSize: TextUnit,
+    modifier: Modifier = Modifier
+) {
+    var fontSize by remember(text) { mutableStateOf(maxFontSize) }
+    var settled by remember(text) { mutableStateOf(false) }
+    Text(
+        text = text,
+        color = color,
+        style = style,
+        fontSize = fontSize,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = modifier.drawWithContent { if (settled) drawContent() },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && fontSize.value > minFontSize.value) {
+                fontSize = (fontSize.value - 1f).coerceAtLeast(minFontSize.value).sp
+            } else if (!settled) {
+                settled = true
+            }
+        }
+    )
 }
 
 /** Badge lembut sudut membulat (mis. "Tersedia", "Sisa 11"). */
