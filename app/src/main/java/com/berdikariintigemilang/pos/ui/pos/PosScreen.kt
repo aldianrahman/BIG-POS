@@ -72,6 +72,7 @@ fun PosScreen(
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    var editingLine by remember { mutableStateOf<CartLine?>(null) }
 
     Column(modifier = modifier.fillMaxSize()) {
         // ── Pencarian + aksi (latar putih) ──────────────────────────────────
@@ -185,7 +186,8 @@ fun PosScreen(
                             line = line,
                             onIncrement = { viewModel.increment(line) },
                             onDecrement = { viewModel.decrement(line) },
-                            onRemove = { viewModel.remove(line.productId) }
+                            onRemove = { viewModel.remove(line.productId) },
+                            onEditQuantity = { editingLine = line }
                         )
                     }
                 }
@@ -206,6 +208,23 @@ fun PosScreen(
             onCheckout = onCheckout
         )
     }
+
+    // Ubah jumlah manual (mis. dari 20 ke 10 tanpa klik berkali-kali).
+    editingLine?.let { line ->
+        QuantityDialog(
+            productName = line.name,
+            unitPrice = line.unitPrice,
+            stock = line.stock,
+            initialQuantity = line.quantity,
+            title = "Ubah Jumlah",
+            confirmLabel = "Simpan",
+            onDismiss = { editingLine = null },
+            onConfirm = { qty ->
+                viewModel.setQuantity(line.productId, qty)
+                editingLine = null
+            }
+        )
+    }
 }
 
 @Composable
@@ -213,7 +232,8 @@ private fun CartItemRow(
     line: CartLine,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onEditQuantity: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -247,7 +267,12 @@ private fun CartItemRow(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            QtyStepper(quantity = line.quantity, onDecrement = onDecrement, onIncrement = onIncrement)
+            QtyStepper(
+                quantity = line.quantity,
+                onDecrement = onDecrement,
+                onIncrement = onIncrement,
+                onQuantityClick = onEditQuantity
+            )
             Spacer(Modifier.width(8.dp))
             Box(
                 modifier = Modifier
@@ -269,7 +294,12 @@ private fun CartItemRow(
 }
 
 @Composable
-private fun QtyStepper(quantity: Int, onDecrement: () -> Unit, onIncrement: () -> Unit) {
+private fun QtyStepper(
+    quantity: Int,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit,
+    onQuantityClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(14.dp))
@@ -279,12 +309,17 @@ private fun QtyStepper(quantity: Int, onDecrement: () -> Unit, onIncrement: () -
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         StepButton(Icons.Filled.Remove, "Kurangi", MaterialTheme.colorScheme.onSurfaceVariant, onDecrement)
+        // Ketuk angka untuk mengubah jumlah secara manual.
         Text(
             quantity.toString(),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(min = 28.dp).padding(horizontal = 2.dp)
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onQuantityClick)
+                .widthIn(min = 40.dp)
+                .padding(horizontal = 6.dp, vertical = 6.dp)
         )
         StepButton(Icons.Filled.Add, "Tambah", MaterialTheme.colorScheme.primary, onIncrement)
     }
