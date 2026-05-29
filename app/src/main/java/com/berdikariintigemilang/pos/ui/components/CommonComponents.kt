@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.berdikariintigemilang.pos.R
 import com.berdikariintigemilang.pos.ui.theme.BigRed
@@ -199,13 +200,14 @@ fun StatusChip(
     }
 }
 
-/** Status kosong yang ramah. */
+/** Status kosong yang ramah, dengan aksi opsional di bawah teks. */
 @Composable
 fun EmptyState(
     icon: ImageVector,
     title: String,
     modifier: Modifier = Modifier,
-    subtitle: String? = null
+    subtitle: String? = null,
+    action: (@Composable () -> Unit)? = null
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),
@@ -219,14 +221,24 @@ fun EmptyState(
             Icon(icon, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
         subtitle?.let {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 it,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
+        }
+        action?.let {
+            Spacer(Modifier.height(24.dp))
+            it()
         }
     }
 }
