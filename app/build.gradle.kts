@@ -88,6 +88,10 @@ dependencies {
     implementation(libs.moshi)
     ksp(libs.moshi.kotlin.codegen)
 
+    // Chucker - HTTP inspector (aktif di debug, otomatis no-op saat build release)
+    debugImplementation(libs.chucker)
+    releaseImplementation(libs.chucker.no.op)
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
