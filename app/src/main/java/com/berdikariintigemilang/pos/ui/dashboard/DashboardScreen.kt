@@ -88,8 +88,8 @@ fun DashboardScreen(
                 StatTile("Rata-rata", Formatters.rupiah(s?.avgTransactionValue), Icons.Filled.BarChart, Modifier.weight(1f))
             }
 
-            if (state.salesTrend.isNotEmpty()) {
-                SalesTrendCard(state.salesTrend)
+            if (state.hourlyTransactions.isNotEmpty()) {
+                HourlyTransactionsCard(state.hourlyTransactions)
             }
 
             IconSectionHeader(Icons.Filled.LocalFireDepartment, MaterialTheme.colorScheme.primary, "Produk Terlaris")
@@ -128,7 +128,8 @@ private fun IconSectionHeader(icon: ImageVector, iconTint: androidx.compose.ui.g
 }
 
 @Composable
-private fun SalesTrendCard(trend: List<SalesTrendPoint>) {
+private fun HourlyTransactionsCard(points: List<ChartPoint>) {
+    val total = points.sumOf { it.value }.toInt()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -142,30 +143,21 @@ private fun SalesTrendCard(trend: List<SalesTrendPoint>) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Tren Omset", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("7 hari terakhir", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Transaksi per Jam", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Hari ini", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(
-                    Formatters.rupiah(trend.sumOf { it.value }),
+                    "${Formatters.number(total)} transaksi",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             Spacer(Modifier.height(14.dp))
-            if (trend.all { it.value <= 0.0 }) {
-                Text(
-                    "Belum ada penjualan dalam 7 hari terakhir",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 16.dp)
-                )
-            } else {
-                LineChart(
-                    values = trend.map { it.value.toFloat() },
-                    labels = trend.map { it.label }
-                )
-            }
+            LineChart(
+                values = points.map { it.value.toFloat() },
+                labels = points.map { it.label }
+            )
         }
     }
 }

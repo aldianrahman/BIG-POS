@@ -18,15 +18,15 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
-/** Satu titik tren omset harian (untuk grafik garis). */
-data class SalesTrendPoint(val label: String, val value: Double)
+/** Satu titik grafik (label sumbu-x + nilai). */
+data class ChartPoint(val label: String, val value: Double)
 
 data class DashboardUiState(
     val loading: Boolean = true,
     val summary: DashboardSummaryDto? = null,
     val topProducts: List<TopProductDto> = emptyList(),
     val lowStock: List<StockDto> = emptyList(),
-    val salesTrend: List<SalesTrendPoint> = emptyList(),
+    val hourlyTransactions: List<ChartPoint> = emptyList(),
     val error: String? = null
 )
 
@@ -55,23 +55,30 @@ class DashboardViewModel @Inject constructor(
             (dashboardRepository.lowStock() as? ApiResult.Success)?.let { res ->
                 _state.update { it.copy(lowStock = res.data) }
             }
-            loadTrend()
+            loadHourlyTransactions()
             _state.update { it.copy(loading = false) }
         }
     }
 
-    /** Ambil omset 7 hari terakhir, isi-nol hari tanpa transaksi agar garis kontinu. */
-    private suspend fun loadTrend() {
-        val from = LocalDate.now().minusDays(6).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+    /** Jumlah transaksi per jam untuk HARI INI (melihat jam ramai). */
+    private suspend fun loadHourlyTransactions() {
+        val from = LocalDate.now().atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val to = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val rows = (reportRepository.sales(from, to, "day") as? ApiResult.Success)?.data ?: return
-        val shortFmt = DateTimeFormatter.ofPattern("dd/MM")
-        val trend = (6 downTo 0).map { back ->
-            val day = LocalDate.now().minusDays(back.toLong())
-            val iso = day.toString()
-            val sales = rows.firstOrNull { it.label.startsWith(iso) }?.totalSales ?: 0.0
-            SalesTrendPoint(label = day.format(shortFmt), value = sales)
-        }
-        _state.update { it.copy(salesTrend = trend) }
+        val rows = (reportRepository.sales(from, to, "hour") as? ApiResult.Success)?.data ?: return
+        val points = rows
+            .sortedBy { hourOf(it.label) ?: Int.MAX_VALUE }
+            .map { row ->
+                val h = hourOf(row.label)
+                val label = if (h != null) "%02d".format(h) else row.label.takeLast(5)
+                ChartPoint(label = label, value = row.totalTransactions.toDouble())
+            }
+        _state.update { it.copy(hourlyTransactions = points) }
     }
+}
+
+/** Ambil angka jam (0-23) dari label apa pun: "14:00", "...T14", atau "14". */
+private fun hourOf(label: String): Int? {
+    Regex("(\\d{1,2})[:.]\\d{2}").find(label)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+    Regex("[ T](\\d{1,2})(?!\\d)").find(label)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+    return label.trim().toIntOrNull()
 }
