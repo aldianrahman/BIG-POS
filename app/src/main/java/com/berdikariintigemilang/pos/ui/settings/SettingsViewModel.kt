@@ -6,10 +6,14 @@ import com.berdikariintigemilang.pos.core.datastore.PrinterStore
 import com.berdikariintigemilang.pos.core.datastore.SavedPrinter
 import com.berdikariintigemilang.pos.core.datastore.SessionUser
 import com.berdikariintigemilang.pos.core.network.ApiResult
+import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.core.printer.PrinterException
 import com.berdikariintigemilang.pos.core.printer.PrinterManager
 import com.berdikariintigemilang.pos.data.repository.AuthRepository
+import com.berdikariintigemilang.pos.data.repository.CatalogCacheRepository
+import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.repository.ShiftRepository
+import com.berdikariintigemilang.pos.data.sync.SyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +30,12 @@ data class SettingsUiState(
     val savedPrinter: SavedPrinter? = null,
     val pairedDevices: List<SavedPrinter> = emptyList(),
     val loadingDevices: Boolean = false,
-    val printing: Boolean = false
+    val printing: Boolean = false,
+    // Sinkronisasi
+    val pendingCount: Int = 0,
+    val isOnline: Boolean = false,
+    val syncing: Boolean = false,
+    val refreshingCatalog: Boolean = false
 )
 
 @HiltViewModel
@@ -34,10 +43,14 @@ class SettingsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val shiftRepository: ShiftRepository,
     private val printerStore: PrinterStore,
-    private val printerManager: PrinterManager
+    private val printerManager: PrinterManager,
+    private val offlineStore: OfflineTransactionStore,
+    private val syncManager: SyncManager,
+    private val catalogCache: CatalogCacheRepository,
+    private val connectivity: ConnectivityObserver
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(SettingsUiState())
+    private val _state = MutableStateFlow(SettingsUiState(isOnline = connectivity.isOnlineNow()))
     val state: StateFlow<SettingsUiState> = _state
 
     private val _messages = Channel<String>(Channel.BUFFERED)
@@ -49,6 +62,15 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             printerStore.printerFlow.collect { p -> _state.update { it.copy(savedPrinter = p) } }
+        }
+        viewModelScope.launch {
+            offlineStore.observeUnsyncedCount().collect { c -> _state.update { it.copy(pendingCount = c) } }
+        }
+        viewModelScope.launch {
+            connectivity.isOnline.collect { on -> _state.update { it.copy(isOnline = on) } }
+        }
+        viewModelScope.launch {
+            syncManager.syncing.collect { s -> _state.update { it.copy(syncing = s) } }
         }
         refreshShift()
     }
@@ -64,7 +86,41 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** Dipanggil setelah izin Bluetooth diberikan. */
+    /** Kirim antrian transaksi sekarang & beri umpan balik. */
+    fun syncNow() {
+        if (!connectivity.isOnlineNow()) {
+            viewModelScope.launch { send("Tidak ada koneksi internet") }
+            return
+        }
+        viewModelScope.launch {
+            val o = syncManager.syncPending()
+            val msg = if (o.synced == 0 && o.conflict == 0 && o.retriable == 0) {
+                "Tidak ada transaksi untuk dikirim"
+            } else {
+                buildString {
+                    append("Terkirim ${o.synced}")
+                    if (o.conflict > 0) append(", konflik ${o.conflict}")
+                    if (o.retriable > 0) append(", gagal ${o.retriable}")
+                }
+            }
+            send(msg)
+        }
+    }
+
+    /** Tarik ulang katalog & stok dari server (persiapan offline). */
+    fun refreshCatalog() {
+        if (!connectivity.isOnlineNow()) {
+            viewModelScope.launch { send("Tidak ada koneksi internet") }
+            return
+        }
+        _state.update { it.copy(refreshingCatalog = true) }
+        viewModelScope.launch {
+            val r = catalogCache.refreshAll()
+            _state.update { it.copy(refreshingCatalog = false) }
+            send(if (r is ApiResult.Success) "Katalog & stok diperbarui" else (r as ApiResult.Error).message)
+        }
+    }
+
     fun loadPairedDevices() {
         _state.update { it.copy(loadingDevices = true) }
         viewModelScope.launch {

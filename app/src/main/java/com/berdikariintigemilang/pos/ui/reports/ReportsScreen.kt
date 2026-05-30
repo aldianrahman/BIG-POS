@@ -91,6 +91,12 @@ fun ReportsScreen(
             }
 
             when {
+                state.offline -> Text(
+                    "Data laporan hanya tersedia saat Anda online",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 24.dp)
+                )
                 state.loading -> FullScreenLoading(Modifier.padding(vertical = 40.dp))
                 state.error != null -> Text(
                     state.error!!,

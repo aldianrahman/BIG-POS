@@ -1,24 +1,22 @@
 package com.berdikariintigemilang.pos.ui.pos
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.berdikariintigemilang.pos.core.network.ApiResult
+import com.berdikariintigemilang.pos.core.datastore.SessionStore
 import com.berdikariintigemilang.pos.data.cart.CartManager
-import com.berdikariintigemilang.pos.data.remote.TransactionItemRequest
-import com.berdikariintigemilang.pos.data.remote.TransactionRequest
-import com.berdikariintigemilang.pos.data.remote.taxFor
-import com.berdikariintigemilang.pos.data.remote.totalFor
-import com.berdikariintigemilang.pos.data.repository.BundleRepository
-import com.berdikariintigemilang.pos.data.repository.SettingsRepository
-import com.berdikariintigemilang.pos.data.repository.TransactionRepository
+import com.berdikariintigemilang.pos.data.pricing.LocalPricingCalculator
+import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
+import com.berdikariintigemilang.pos.data.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 import javax.inject.Inject
 
 data class PaymentUiState(
@@ -36,37 +34,44 @@ data class PaymentUiState(
     val sufficient: Boolean get() = cash >= total
 }
 
+/**
+ * Pembayaran OFFLINE-FIRST: total (bundle + PPN) dihitung lokal dari katalog
+ * yang di-cache, dan transaksi disimpan ke antrian lokal terlebih dahulu
+ * (tidak langsung ke server). Pengiriman ke server dilakukan oleh WorkManager
+ * saat ada koneksi, memakai idempotency key milik transaksi (anti-dobel).
+ */
 @HiltViewModel
 class PaymentViewModel @Inject constructor(
     private val cartManager: CartManager,
-    private val transactionRepository: TransactionRepository,
-    private val bundleRepository: BundleRepository,
-    private val settingsRepository: SettingsRepository
+    private val offlineStore: OfflineTransactionStore,
+    private val pricing: LocalPricingCalculator,
+    private val sessionStore: SessionStore,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
-
-    // Idempotency key tetap selama layar ini hidup (retry aman tak dobel).
-    private val idempotencyKey = UUID.randomUUID().toString()
 
     private val _state = MutableStateFlow(initialState())
     val state: StateFlow<PaymentUiState> = _state
 
-    private val _success = Channel<Long>(Channel.BUFFERED)
+    /** Emit clientTxnId (UUID) transaksi tersimpan agar layar struk bisa memuatnya. */
+    private val _success = Channel<String>(Channel.BUFFERED)
     val success = _success.receiveAsFlow()
 
+    private var cashierName: String? = null
+
     init {
-        // Ambil potongan bundle + PPN dari server agar total yang ditagih benar.
+        viewModelScope.launch { cashierName = sessionStore.userFlow.first()?.fullName }
+        // Hitung potongan bundle + PPN secara lokal agar total benar tanpa sinyal.
         viewModelScope.launch {
             val lines = cartManager.lines.value
-            val bundleDiscount = if (lines.isEmpty()) 0.0
-            else (bundleRepository.calculate(lines) as? ApiResult.Success)?.data?.bundleDiscount ?: 0.0
-            val taxCfg = (settingsRepository.receiptSetting() as? ApiResult.Success)?.data
-            _state.update { st ->
-                val base = (st.subtotal - st.discount - bundleDiscount).coerceAtLeast(0.0)
-                st.copy(
-                    bundleDiscount = bundleDiscount,
-                    taxAmount = taxCfg.taxFor(base),
-                    taxInclusive = taxCfg?.taxInclusive ?: true,
-                    total = taxCfg.totalFor(base)
+            val p = pricing.price(lines, cartManager.discount.value)
+            _state.update {
+                it.copy(
+                    subtotal = p.subtotal,
+                    discount = p.discount,
+                    bundleDiscount = p.bundleDiscount,
+                    taxAmount = p.taxAmount,
+                    taxInclusive = p.taxInclusive,
+                    total = p.total
                 )
             }
         }
@@ -105,11 +110,6 @@ class PaymentViewModel @Inject constructor(
     fun setExact() = _state.update { it.copy(cash = it.total.toLong(), error = null) }
 
     fun confirm() {
-        val s = _state.value
-        if (!s.sufficient) {
-            _state.update { it.copy(error = "Uang diterima kurang dari total") }
-            return
-        }
         val lines = cartManager.lines.value
         if (lines.isEmpty()) {
             _state.update { it.copy(error = "Keranjang kosong") }
@@ -117,18 +117,28 @@ class PaymentViewModel @Inject constructor(
         }
         _state.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
-            val request = TransactionRequest(
-                items = lines.map { TransactionItemRequest(it.productId, it.quantity) },
-                discountAmount = cartManager.discount.value,
-                cashReceived = s.cash.toDouble()
-            )
-            when (val res = transactionRepository.create(idempotencyKey, request)) {
-                is ApiResult.Success -> {
-                    cartManager.clear()
-                    _state.update { it.copy(submitting = false) }
-                    _success.send(res.data.id)
+            try {
+                // Hitung ulang harga otoritatif (sumber yang sama dipakai saat menyimpan).
+                val priced = pricing.price(lines, cartManager.discount.value)
+                val cash = _state.value.cash.toDouble()
+                if (cash < priced.total) {
+                    _state.update { it.copy(submitting = false, error = "Uang diterima kurang dari total") }
+                    return@launch
                 }
-                is ApiResult.Error -> _state.update { it.copy(submitting = false, error = res.message) }
+                val entity = offlineStore.enqueue(
+                    lines = lines,
+                    discount = cartManager.discount.value,
+                    cashReceived = cash,
+                    notes = null,
+                    cashierName = cashierName
+                )
+                cartManager.clear()
+                // Coba kirim segera bila ada koneksi; bila tidak, WorkManager menunggu.
+                SyncScheduler.syncNow(appContext)
+                _state.update { it.copy(submitting = false) }
+                _success.send(entity.clientTxnId)
+            } catch (e: Exception) {
+                _state.update { it.copy(submitting = false, error = e.message ?: "Gagal menyimpan transaksi") }
             }
         }
     }

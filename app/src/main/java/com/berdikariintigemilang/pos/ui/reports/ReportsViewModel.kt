@@ -3,6 +3,7 @@ package com.berdikariintigemilang.pos.ui.reports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.network.ApiResult
+import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.data.remote.ProfitReportDto
 import com.berdikariintigemilang.pos.data.remote.SalesReportRowDto
 import com.berdikariintigemilang.pos.data.repository.ReportRepository
@@ -23,18 +24,32 @@ data class ReportsUiState(
     val rangeLabel: String = "7 hari terakhir",
     val rows: List<SalesReportRowDto> = emptyList(),
     val profit: ProfitReportDto? = null,
+    val offline: Boolean = false,
     val error: String? = null
 )
 
+/**
+ * Laporan adalah hasil agregasi server (penjualan per kelompok + laba), jadi
+ * hanya tersedia saat online. Saat offline, seluruh kartu dikosongkan dan
+ * ditampilkan pesan agar pengguna online. Otomatis dimuat ulang saat koneksi
+ * kembali.
+ */
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
-    private val reportRepository: ReportRepository
+    private val reportRepository: ReportRepository,
+    private val connectivity: ConnectivityObserver
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ReportsUiState())
+    private val _state = MutableStateFlow(ReportsUiState(offline = !connectivity.isOnlineNow()))
     val state: StateFlow<ReportsUiState> = _state
 
-    init { load() }
+    init {
+        viewModelScope.launch {
+            connectivity.isOnline.collect { online ->
+                if (online) load() else markOffline()
+            }
+        }
+    }
 
     fun setGroupBy(groupBy: String) {
         _state.update { it.copy(groupBy = groupBy) }
@@ -43,15 +58,26 @@ class ReportsViewModel @Inject constructor(
 
     fun load() = fetch(isRefresh = false)
 
-    /** Muat ulang via tarik-ke-bawah (indikator refresh, konten tetap tampil). */
+    /** Muat ulang via tarik-ke-bawah. */
     fun refresh() = fetch(isRefresh = true)
 
+    private fun markOffline() {
+        _state.update {
+            it.copy(loading = false, refreshing = false, offline = true, rows = emptyList(), profit = null, error = null)
+        }
+    }
+
     private fun fetch(isRefresh: Boolean) {
+        if (!connectivity.isOnlineNow()) {
+            markOffline()
+            return
+        }
         val from = LocalDate.now().minusDays(6).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val to = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val groupBy = _state.value.groupBy
         _state.update {
-            if (isRefresh) it.copy(refreshing = true, error = null) else it.copy(loading = true, error = null)
+            if (isRefresh) it.copy(refreshing = true, error = null, offline = false)
+            else it.copy(loading = true, error = null, offline = false)
         }
         viewModelScope.launch {
             when (val sales = reportRepository.sales(from, to, groupBy)) {

@@ -106,6 +106,9 @@ interface ApiService {
         @Body body: TransactionRequest
     ): PosApiResponse<TransactionDto>
 
+    @POST("api/pos/transactions/batch")
+    suspend fun createTransactionsBatch(@Body body: BatchRequest): PosApiResponse<BatchResponse>
+
     @GET("api/pos/transactions")
     suspend fun transactions(
         @Query("from") from: String?,
@@ -121,6 +124,9 @@ interface ApiService {
     suspend fun receipt(@Path("id") id: Long): PosApiResponse<ReceiptDto>
 
     // ===== Bundles =====
+    @GET("api/pos/bundles")
+    suspend fun bundles(): PosApiResponse<List<BundleListDto>>
+
     @POST("api/pos/bundles/calculate")
     suspend fun calculateBundles(@Body body: BundleCalcRequest): PosApiResponse<BundleCalcResult>
 
