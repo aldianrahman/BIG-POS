@@ -94,6 +94,16 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // Room (DB lokal: antrian transaksi offline + cache katalog/stok)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // WorkManager (sinkronisasi transaksi saat sinyal kembali)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
     // Coil
     implementation(libs.coil.compose)
 

@@ -5,6 +5,10 @@ import com.squareup.moshi.JsonClass
 /** Subset pengaturan struk yang dibutuhkan app (untuk hitung PPN agar total sinkron). */
 @JsonClass(generateAdapter = true)
 data class ReceiptSettingDto(
+    val storeName: String = "",
+    val address: String = "",
+    val phone: String = "",
+    val footer: String = "",
     val taxEnabled: Boolean = false,
     val taxPercent: Double = 0.0,
     val taxInclusive: Boolean = true

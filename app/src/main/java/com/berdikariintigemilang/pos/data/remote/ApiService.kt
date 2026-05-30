@@ -121,6 +121,9 @@ interface ApiService {
     suspend fun receipt(@Path("id") id: Long): PosApiResponse<ReceiptDto>
 
     // ===== Bundles =====
+    @GET("api/pos/bundles")
+    suspend fun bundles(): PosApiResponse<List<BundleListDto>>
+
     @POST("api/pos/bundles/calculate")
     suspend fun calculateBundles(@Body body: BundleCalcRequest): PosApiResponse<BundleCalcResult>
 
