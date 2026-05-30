@@ -19,20 +19,22 @@ import javax.inject.Singleton
  * Menarik katalog (produk, stok, bundle, pengaturan struk) dari server ke
  * cache lokal Room agar POS bisa beroperasi penuh tanpa sinyal.
  *
- * Dipanggil saat ada koneksi (mis. sebelum festival / buka shift / tombol
- * "Perbarui katalog"). Stok lokal SENGAJA tidak ditimpa bila sudah ada
- * (kecuali [resetStock]=true) agar pengurangan stok offline tidak hilang.
+ * Stok lokal dihitung sebagai: stok server − penjualan yang BELUM tersinkron,
+ * sehingga refresh dari server SELALU benar — memunculkan restock dari web
+ * sekaligus mempertahankan pengurangan stok dari penjualan offline.
  */
 @Singleton
 class CatalogCacheRepository @Inject constructor(
     private val api: ApiService,
     private val catalogDao: CatalogDao,
-    private val localStockDao: LocalStockDao
+    private val localStockDao: LocalStockDao,
+    private val offlineStore: OfflineTransactionStore
 ) {
 
-    suspend fun refreshAll(resetStock: Boolean = false): ApiResult<Unit> = try {
+    /** Tarik seluruh katalog + stok (untuk persiapan offline / tombol manual). */
+    suspend fun refreshAll(): ApiResult<Unit> = try {
         cacheProducts()
-        cacheStock(resetStock)
+        cacheStock()
         cacheBundles()
         cacheReceiptSetting()
         ApiResult.Success(Unit)
@@ -44,7 +46,41 @@ class CatalogCacheRepository @Inject constructor(
         ApiResult.Error(e.message ?: "Gagal memuat katalog")
     }
 
-    /** Katalog sudah pernah diunduh? (penanda apakah aman beroperasi offline). */
+    /** Refresh ringan khusus stok (satu panggilan) — dipakai tiap kali online. */
+    suspend fun refreshStock(): ApiResult<Unit> = try {
+        cacheStock()
+        ApiResult.Success(Unit)
+    } catch (e: HttpException) {
+        ApiResult.Error(mapHttp(e.code()), httpStatus = e.code())
+    } catch (e: IOException) {
+        ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
+    } catch (e: Exception) {
+        ApiResult.Error(e.message ?: "Gagal memuat stok")
+    }
+
+    /**
+     * Segarkan cache untuk produk yang baru diambil dari server (saat browsing
+     * online), termasuk stoknya — supaya bila tiba-tiba offline, data terbaru
+     * (mis. hasil restock di web) sudah tersimpan lokal.
+     */
+    suspend fun cacheServerProducts(products: List<ProductDto>) {
+        if (products.isEmpty()) return
+        catalogDao.upsertProducts(products.map { it.toCached() })
+        val unsynced = offlineStore.unsyncedSoldQuantities()
+        val now = System.currentTimeMillis()
+        val rows = products.mapNotNull { p ->
+            val serverQty = p.stockQuantity ?: return@mapNotNull null
+            LocalStockEntity(
+                productId = p.id,
+                quantity = serverQty - (unsynced[p.id] ?: 0),
+                minStock = p.minStock ?: 0,
+                serverQuantity = serverQty,
+                updatedAt = now
+            )
+        }
+        if (rows.isNotEmpty()) localStockDao.upsertAll(rows)
+    }
+
     suspend fun isCatalogReady(): Boolean = catalogDao.productCount() > 0
 
     private suspend fun cacheProducts() {
@@ -63,19 +99,17 @@ class CatalogCacheRepository @Inject constructor(
         catalogDao.upsertProducts(all)
     }
 
-    private suspend fun cacheStock(reset: Boolean) {
+    private suspend fun cacheStock() {
         val res = api.stocks(null, false)
         check(res.success) { res.error?.message ?: res.message ?: "Gagal memuat stok" }
         val server = res.data ?: emptyList()
+        val unsynced = offlineStore.unsyncedSoldQuantities()
         val now = System.currentTimeMillis()
-        val existing = localStockDao.getAll().associateBy { it.productId }
         val rows = server.map { s ->
-            val prev = existing[s.productId]
-            // Pertahankan qty lokal (hasil penjualan offline) kecuali reset eksplisit.
-            val qty = if (prev == null || reset) s.quantity else prev.quantity
             LocalStockEntity(
                 productId = s.productId,
-                quantity = qty,
+                // Stok server dikurangi penjualan offline yang belum tersinkron.
+                quantity = s.quantity - (unsynced[s.productId] ?: 0),
                 minStock = s.minStock,
                 serverQuantity = s.quantity,
                 updatedAt = now

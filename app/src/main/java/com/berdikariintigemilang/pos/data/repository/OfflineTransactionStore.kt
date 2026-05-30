@@ -123,6 +123,23 @@ class OfflineTransactionStore @Inject constructor(
         )
     }
 
+    /**
+     * Total qty terjual pada transaksi yang BELUM tersinkron, per produk.
+     * Dipakai untuk menghitung stok lokal = stok server − penjualan belum tersinkron,
+     * sehingga refresh dari server tidak menghilangkan pengurangan stok offline.
+     */
+    suspend fun unsyncedSoldQuantities(): Map<Long, Int> {
+        val map = HashMap<Long, Int>()
+        pendingDao.getAllOnce()
+            .filter { it.status != SyncStatus.SYNCED.name }
+            .forEach { e ->
+                (itemsAdapter.fromJson(e.itemsJson) ?: emptyList()).forEach { item ->
+                    map.merge(item.productId, item.quantity, Int::plus)
+                }
+            }
+        return map
+    }
+
     suspend fun markSynced(clientTxnId: String, serverId: Long, serverTrxNo: String) {
         val e = pendingDao.getById(clientTxnId) ?: return
         pendingDao.update(

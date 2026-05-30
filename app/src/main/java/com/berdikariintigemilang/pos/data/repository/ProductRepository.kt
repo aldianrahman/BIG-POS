@@ -23,12 +23,15 @@ import javax.inject.Singleton
 class ProductRepository @Inject constructor(
     private val api: ApiService,
     private val catalogDao: CatalogDao,
-    private val localStock: LocalStockRepository
+    private val localStock: LocalStockRepository,
+    private val catalogCache: CatalogCacheRepository
 ) {
     suspend fun search(query: String?, page: Int, size: Int = 20): ApiResult<PageDto<ProductDto>> = try {
         val res = api.searchProducts(query, null, page, size)
-        if (res.success && res.data != null) ApiResult.Success(res.data)
-        else cacheSearch(query) ?: ApiResult.Error(res.error?.message ?: res.message ?: "Gagal memuat produk")
+        if (res.success && res.data != null) {
+            catalogCache.cacheServerProducts(res.data.content)
+            ApiResult.Success(res.data)
+        } else cacheSearch(query) ?: ApiResult.Error(res.error?.message ?: res.message ?: "Gagal memuat produk")
     } catch (e: IOException) {
         cacheSearch(query) ?: ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
     } catch (e: HttpException) {
@@ -39,8 +42,10 @@ class ProductRepository @Inject constructor(
 
     suspend fun byBarcode(barcode: String): ApiResult<ProductDto> = try {
         val res = api.productByBarcode(barcode)
-        if (res.success && res.data != null) ApiResult.Success(res.data)
-        else cacheBarcode(barcode) ?: ApiResult.Error(res.error?.message ?: "Produk tidak ditemukan", httpStatus = 404)
+        if (res.success && res.data != null) {
+            catalogCache.cacheServerProducts(listOf(res.data))
+            ApiResult.Success(res.data)
+        } else cacheBarcode(barcode) ?: ApiResult.Error(res.error?.message ?: "Produk tidak ditemukan", httpStatus = 404)
     } catch (e: IOException) {
         cacheBarcode(barcode) ?: ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
     } catch (e: HttpException) {
@@ -52,8 +57,10 @@ class ProductRepository @Inject constructor(
 
     suspend fun getById(id: Long): ApiResult<ProductDto> = try {
         val res = api.product(id)
-        if (res.success && res.data != null) ApiResult.Success(res.data)
-        else cacheById(id) ?: ApiResult.Error(res.error?.message ?: "Data tidak ditemukan", httpStatus = 404)
+        if (res.success && res.data != null) {
+            catalogCache.cacheServerProducts(listOf(res.data))
+            ApiResult.Success(res.data)
+        } else cacheById(id) ?: ApiResult.Error(res.error?.message ?: "Data tidak ditemukan", httpStatus = 404)
     } catch (e: IOException) {
         cacheById(id) ?: ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
     } catch (e: HttpException) {

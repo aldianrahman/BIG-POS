@@ -99,11 +99,16 @@ class PosViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), connectivity.isOnlineNow())
 
     init {
-        // Saat ada koneksi: pastikan katalog ter-cache (untuk offline) & kirim antrian.
+        // Tiap kali ada koneksi (termasuk saat sinyal kembali): segarkan katalog bila
+        // belum ada, refresh stok lokal (agar restock/penyesuaian dari server masuk),
+        // lalu kirim antrian transaksi.
         viewModelScope.launch {
-            if (connectivity.isOnlineNow()) {
-                if (!catalogCache.isCatalogReady()) catalogCache.refreshAll()
-                SyncScheduler.syncNow(appContext)
+            connectivity.isOnline.collect { online ->
+                if (online) {
+                    if (!catalogCache.isCatalogReady()) catalogCache.refreshAll()
+                    catalogCache.refreshStock()
+                    SyncScheduler.syncNow(appContext)
+                }
             }
         }
     }
