@@ -13,6 +13,7 @@ import com.berdikariintigemilang.pos.data.repository.DashboardRepository
 import com.berdikariintigemilang.pos.data.repository.InventoryRepository
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.repository.TransactionRepository
+import com.berdikariintigemilang.pos.data.sync.SyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,12 +41,17 @@ data class DashboardUiState(
 )
 
 /**
- * Dashboard yang sepenuhnya offline-capable & realtime: SEMUA kartu (omzet,
- * transaksi, laba, rata-rata, grafik, produk terlaris, stok menipis) langsung
- * mencerminkan transaksi lokal — termasuk penjualan offline yang belum
- * tersinkron. Saat online, angka server menjadi basis dan transaksi lokal yang
- * belum tersinkron ditambahkan di atasnya (tanpa dobel). Saat offline, seluruh
- * angka dihitung dari data lokal HP ini.
+ * Dashboard offline-capable & realtime.
+ *
+ * Prinsip angka (sama untuk online & offline, agar konsisten):
+ *   total = snapshot server terakhir  +  transaksi lokal yang BELUM tersinkron
+ *
+ * Transaksi yang sudah SYNCED TIDAK dihitung dari salinan lokal — itu milik
+ * server (sudah tercakup di snapshot server). Menghitungnya lagi dari lokal
+ * membuat angka salah bila data di server diubah/dihapus (mis. transaksi
+ * dihapus admin tapi salinan lokalnya masih ada). Saat offline dipakai snapshot
+ * server TERAKHIR yang diketahui; saat online snapshot di-refresh (termasuk
+ * tepat setelah sinkronisasi selesai).
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -53,7 +59,8 @@ class DashboardViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val inventoryRepository: InventoryRepository,
     private val offlineStore: OfflineTransactionStore,
-    private val connectivity: ConnectivityObserver
+    private val connectivity: ConnectivityObserver,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DashboardUiState())
@@ -61,7 +68,7 @@ class DashboardViewModel @Inject constructor(
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
 
-    // Cache data server terakhir + transaksi lokal terkini.
+    // Snapshot server TERAKHIR yang diketahui + transaksi lokal terkini.
     private var serverSummary: DashboardSummaryDto? = null
     private var serverTop: List<TopProductDto> = emptyList()
     private var serverLowStock: List<StockDto> = emptyList()
@@ -75,7 +82,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             offlineStore.observeAll().collect { txns -> localTxns = txns; rebuild() }
         }
-        // Koneksi kembali -> tarik ulang data server otomatis.
+        // Koneksi kembali -> tarik ulang snapshot server otomatis.
         viewModelScope.launch {
             connectivity.isOnline.collect { on ->
                 val was = online
@@ -83,25 +90,37 @@ class DashboardViewModel @Inject constructor(
                 if (on && !was) load() else rebuild()
             }
         }
+        // Setiap sinkronisasi SELESAI (saat online), segarkan snapshot server agar
+        // dashboard mencerminkan transaksi yang baru tersinkron sekaligus setiap
+        // perubahan/penghapusan data di server — tanpa kedip layar (silent).
+        viewModelScope.launch {
+            var prev = false
+            syncManager.syncing.collect { syncing ->
+                if (prev && !syncing && connectivity.isOnlineNow()) fetch(silent = true)
+                prev = syncing
+            }
+        }
         load()
     }
 
-    fun load() = fetch(isRefresh = false)
+    fun load() = fetch()
 
     /** Muat ulang via tarik-ke-bawah. */
     fun refresh() = fetch(isRefresh = true)
 
-    private fun fetch(isRefresh: Boolean) {
+    private fun fetch(isRefresh: Boolean = false, silent: Boolean = false) {
         if (!connectivity.isOnlineNow()) {
             online = false
             _state.update { it.copy(loading = false, refreshing = false, offline = true) }
             viewModelScope.launch { rebuild() }
             return
         }
-        val date = LocalDate.now().toString()
-        _state.update {
-            if (isRefresh) it.copy(refreshing = true, error = null) else it.copy(loading = true, error = null)
+        if (!silent) {
+            _state.update {
+                if (isRefresh) it.copy(refreshing = true, error = null) else it.copy(loading = true, error = null)
+            }
         }
+        val date = LocalDate.now().toString()
         viewModelScope.launch {
             when (val summary = dashboardRepository.summary(date)) {
                 is ApiResult.Success -> { serverSummary = summary.data; serverFresh = true }
@@ -141,20 +160,22 @@ class DashboardViewModel @Inject constructor(
     }
 
     /**
-     * Gabungkan data server + transaksi lokal HARI INI ke seluruh kartu dashboard.
-     * Online: basis = server, overlay = transaksi lokal belum tersinkron.
-     * Offline: seluruhnya dari transaksi lokal hari ini.
+     * Susun seluruh kartu dashboard: snapshot server (bila ada) + overlay
+     * transaksi lokal yang BELUM tersinkron. Transaksi SYNCED tidak pernah
+     * dihitung dari lokal (lihat dokumentasi kelas).
      */
     private suspend fun rebuild() {
         val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val serverAvailable = online && serverFresh
-        val includeSynced = !serverAvailable
+        // Snapshot server terakhir yang diketahui (mungkin agak basi bila sedang
+        // offline, tapi itu kebenaran terbaik yang kita punya — bukan menghitung
+        // ulang dari salinan SYNCED lokal yang bisa hantu).
+        val haveSnapshot = serverFresh
 
-        val agg = offlineStore.aggregateLocalSales(todayStart, includeSynced)
+        // Hanya transaksi lokal yang BELUM tersinkron yang ditambahkan.
+        val agg = offlineStore.aggregateLocalSales(todayStart, includeSynced = false)
 
-        // Titik grafik dari transaksi lokal (filter sama dengan agregat).
         val overlayPoints = localTxns
-            .filter { it.createdAt >= todayStart && (includeSynced || it.status != "SYNCED") }
+            .filter { it.createdAt >= todayStart && it.status != "SYNCED" }
             .sortedBy { it.createdAt }
             .map {
                 ChartPoint(
@@ -164,9 +185,9 @@ class DashboardViewModel @Inject constructor(
             }
 
         // ── Ringkasan ──
-        val baseSales = if (serverAvailable) serverSummary?.totalSales ?: 0.0 else 0.0
-        val baseCount = if (serverAvailable) serverSummary?.totalTransactions ?: 0 else 0
-        val baseProfit = if (serverAvailable) serverSummary?.totalProfit ?: 0.0 else 0.0
+        val baseSales = if (haveSnapshot) serverSummary?.totalSales ?: 0.0 else 0.0
+        val baseCount = if (haveSnapshot) serverSummary?.totalTransactions ?: 0 else 0
+        val baseProfit = if (haveSnapshot) serverSummary?.totalProfit ?: 0.0 else 0.0
         val totalSales = baseSales + agg.totalSales
         val totalCount = baseCount + agg.count
         val totalProfit = baseProfit + agg.totalProfit
@@ -178,9 +199,9 @@ class DashboardViewModel @Inject constructor(
             avgTransactionValue = if (totalCount > 0) totalSales / totalCount else 0.0
         )
 
-        // ── Produk terlaris (gabung server + lokal, urut ulang) ──
+        // ── Produk terlaris (snapshot server + overlay lokal belum tersinkron) ──
         val merged = LinkedHashMap<Long, TopProductDto>()
-        if (serverAvailable) serverTop.forEach { merged[it.productId] = it }
+        if (haveSnapshot) serverTop.forEach { merged[it.productId] = it }
         agg.products.forEach { lp ->
             val ex = merged[lp.productId]
             merged[lp.productId] = ex?.copy(
@@ -194,7 +215,7 @@ class DashboardViewModel @Inject constructor(
         val localLow = inventoryRepository.localStockList(null, lowStock = true)
         val lowStock = if (localLow.isNotEmpty() || serverLowStock.isEmpty()) localLow else serverLowStock
 
-        val basePoints = if (serverAvailable) serverPoints else emptyList()
+        val basePoints = if (haveSnapshot) serverPoints else emptyList()
 
         _state.update {
             it.copy(

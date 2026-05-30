@@ -35,6 +35,14 @@ interface PendingTransactionDao {
 
     @Query("SELECT COUNT(*) FROM pending_transactions WHERE status = :status")
     suspend fun countByStatus(status: String): Int
+
+    /**
+     * Hapus transaksi yang SUDAH tersinkron & lebih lama dari [cutoff] (epoch
+     * millis). Aman: data sudah tersimpan di server. Mencegah penumpukan
+     * "data hantu" di lokal yang bisa mengacaukan tampilan offline.
+     */
+    @Query("DELETE FROM pending_transactions WHERE status = 'SYNCED' AND createdAt < :cutoff")
+    suspend fun deleteSyncedOlderThan(cutoff: Long): Int
 }
 
 @Dao

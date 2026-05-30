@@ -68,6 +68,15 @@ class OfflineTransactionStore @Inject constructor(
     suspend fun pendingForSync(): List<PendingTransactionEntity> = pendingDao.pendingForSync()
 
     /**
+     * Bersihkan transaksi tersinkron yang sudah lebih tua dari [retentionMillis]
+     * (default 2 hari). Transaksi ini sudah aman di server, sehingga salinan
+     * lokalnya tak perlu disimpan selamanya — mencegah "data hantu" menumpuk.
+     * Transaksi hari ini tetap dipertahankan (untuk cetak ulang struk).
+     */
+    suspend fun purgeOldSynced(retentionMillis: Long = 2 * 24 * 60 * 60 * 1000L): Int =
+        pendingDao.deleteSyncedOlderThan(System.currentTimeMillis() - retentionMillis)
+
+    /**
      * Simpan transaksi ke antrian lokal (PENDING) + kurangi stok lokal.
      * Mengembalikan entity tersimpan (berisi struk siap cetak & nomor sementara).
      */

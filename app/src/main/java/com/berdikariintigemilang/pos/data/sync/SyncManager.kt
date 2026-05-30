@@ -54,6 +54,9 @@ class SyncManager @Inject constructor(
     suspend fun syncPending(): SyncOutcome = mutex.withLock {
         _syncing.value = true
         try {
+            // Bersihkan transaksi tersinkron lama (sudah aman di server) agar tidak
+            // menumpuk jadi "data hantu" di lokal.
+            runCatching { store.purgeOldSynced() }
             val pending = store.pendingForSync()
             if (pending.isEmpty()) return SyncOutcome()
             try {
