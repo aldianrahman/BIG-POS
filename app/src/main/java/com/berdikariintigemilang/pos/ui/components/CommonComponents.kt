@@ -1,5 +1,6 @@
 package com.berdikariintigemilang.pos.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,21 +21,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.berdikariintigemilang.pos.R
 import com.berdikariintigemilang.pos.ui.theme.BigRed
 import com.berdikariintigemilang.pos.ui.theme.BigRedDark
@@ -199,13 +212,14 @@ fun StatusChip(
     }
 }
 
-/** Status kosong yang ramah. */
+/** Status kosong yang ramah, dengan aksi opsional di bawah teks. */
 @Composable
 fun EmptyState(
     icon: ImageVector,
     title: String,
     modifier: Modifier = Modifier,
-    subtitle: String? = null
+    subtitle: String? = null,
+    action: (@Composable () -> Unit)? = null
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),
@@ -219,14 +233,24 @@ fun EmptyState(
             Icon(icon, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
         subtitle?.let {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 it,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
+        }
+        action?.let {
+            Spacer(Modifier.height(24.dp))
+            it()
         }
     }
 }
@@ -234,3 +258,126 @@ fun EmptyState(
 /** Spacer horizontal kecil yang sering dipakai. */
 @Composable
 fun HSpace(width: Int) = Spacer(Modifier.width(width.dp))
+
+/** Judul besar halaman (gaya large-title) + subjudul opsional + garis pemisah. */
+@Composable
+fun ScreenHeader(title: String, subtitle: String? = null, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 14.dp)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            subtitle?.let {
+                Spacer(Modifier.height(2.dp))
+                Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    }
+}
+
+/** Label seksi kecil huruf kapital abu (mis. "PERANGKAT", "PENJUALAN PER"). */
+@Composable
+fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text.uppercase(),
+        modifier = modifier,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 0.8.sp
+    )
+}
+
+/** Kartu metrik netral: ikon di kotak abu + label + nilai besar. */
+@Composable
+fun StatTile(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AutoResizeText(
+                    text = value,
+                    color = valueColor,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    maxFontSize = 24.sp,
+                    minFontSize = 15.sp
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Teks satu baris yang otomatis mengecil agar selalu muat (tidak terpotong /
+ * tidak pindah baris) — mis. nominal Rupiah jutaan pada kartu metrik.
+ */
+@Composable
+private fun AutoResizeText(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    maxFontSize: TextUnit,
+    minFontSize: TextUnit,
+    modifier: Modifier = Modifier
+) {
+    var fontSize by remember(text) { mutableStateOf(maxFontSize) }
+    var settled by remember(text) { mutableStateOf(false) }
+    Text(
+        text = text,
+        color = color,
+        style = style,
+        fontSize = fontSize,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = modifier.drawWithContent { if (settled) drawContent() },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && fontSize.value > minFontSize.value) {
+                fontSize = (fontSize.value - 1f).coerceAtLeast(minFontSize.value).sp
+            } else if (!settled) {
+                settled = true
+            }
+        }
+    )
+}
+
+/** Badge lembut sudut membulat (mis. "Tersedia", "Sisa 11"). */
+@Composable
+fun SoftBadge(text: String, container: Color, content: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(container)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = content)
+    }
+}

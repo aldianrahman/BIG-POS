@@ -40,10 +40,13 @@ fun QuantityDialog(
     productName: String,
     unitPrice: Double,
     stock: Int?,
+    initialQuantity: Int = 1,
+    title: String = "Tambah ke Keranjang",
+    confirmLabel: String = "Tambah",
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
-    var qtyText by remember { mutableStateOf("1") }
+    var qtyText by remember(initialQuantity) { mutableStateOf(initialQuantity.toString()) }
     val qty = qtyText.toIntOrNull() ?: 0
     val maxStock = stock ?: Int.MAX_VALUE
     val valid = qty in 1..maxStock
@@ -54,7 +57,7 @@ fun QuantityDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
-                "Tambah ke Keranjang",
+                title,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -144,7 +147,7 @@ fun QuantityDialog(
         confirmButton = {
             TextButton(onClick = { onConfirm(qty) }, enabled = valid) {
                 Text(
-                    "Tambah",
+                    confirmLabel,
                     style = MaterialTheme.typography.labelLarge,
                     color = if (valid) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant

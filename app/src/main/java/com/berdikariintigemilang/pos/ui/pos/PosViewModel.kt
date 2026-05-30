@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.data.cart.CartManager
+import com.berdikariintigemilang.pos.data.cart.DiscountMode
 import com.berdikariintigemilang.pos.data.remote.AppliedBundleDto
 import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
 import com.berdikariintigemilang.pos.data.remote.taxFor
@@ -26,6 +27,8 @@ data class PosCartState(
     val lines: List<CartLine> = emptyList(),
     val subtotal: Double = 0.0,
     val discount: Double = 0.0,
+    val discountMode: DiscountMode = DiscountMode.RUPIAH,
+    val discountInput: Double = 0.0,
     val bundleDiscount: Double = 0.0,
     val appliedBundles: List<AppliedBundleDto> = emptyList(),
     val taxAmount: Double = 0.0,
@@ -70,13 +73,22 @@ class PosViewModel @Inject constructor(
     }
 
     val state: StateFlow<PosCartState> =
-        combine(cartManager.lines, cartManager.discount, bundle, tax) { lines, discount, b, taxCfg ->
+        combine(
+            cartManager.lines,
+            cartManager.discount,
+            cartManager.discountMode,
+            cartManager.discountInput,
+            combine(bundle, tax) { b, taxCfg -> b to taxCfg }
+        ) { lines, discount, mode, input, bundleTax ->
+            val (b, taxCfg) = bundleTax
             val subtotal = lines.sumOf { it.lineSubtotal }
             val base = (subtotal - discount - b.discount).coerceAtLeast(0.0)
             PosCartState(
                 lines = lines,
                 subtotal = subtotal,
                 discount = discount,
+                discountMode = mode,
+                discountInput = input,
                 bundleDiscount = b.discount,
                 appliedBundles = b.applied,
                 taxAmount = taxCfg.taxFor(base),
@@ -90,6 +102,7 @@ class PosViewModel @Inject constructor(
     fun decrement(line: CartLine) = cartManager.setQuantity(line.productId, line.quantity - 1)
     fun setQuantity(productId: Long, qty: Int) = cartManager.setQuantity(productId, qty)
     fun remove(productId: Long) = cartManager.remove(productId)
-    fun setDiscount(amount: Double) = cartManager.setDiscount(amount)
+    fun setDiscountInput(value: Double) = cartManager.setDiscountInput(value)
+    fun setDiscountMode(mode: DiscountMode) = cartManager.setDiscountMode(mode)
     fun clear() = cartManager.clear()
 }
