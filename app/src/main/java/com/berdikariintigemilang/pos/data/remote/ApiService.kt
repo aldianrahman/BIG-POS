@@ -106,6 +106,9 @@ interface ApiService {
         @Body body: TransactionRequest
     ): PosApiResponse<TransactionDto>
 
+    @POST("api/pos/transactions/batch")
+    suspend fun createTransactionsBatch(@Body body: BatchRequest): PosApiResponse<BatchResponse>
+
     @GET("api/pos/transactions")
     suspend fun transactions(
         @Query("from") from: String?,

@@ -129,16 +129,27 @@ class OfflineTransactionStore @Inject constructor(
         return entity
     }
 
-    /** Bentuk ulang request untuk dikirim ke server saat sinkronisasi. */
+    /**
+     * Bentuk ulang request untuk dikirim ke server saat sinkronisasi, membawa
+     * waktu jual asli (agar laporan akurat) dan allowNegativeStock=true (server
+     * menerima penjualan offline yang sudah terjadi walau stok kurang).
+     */
     fun toRequest(e: PendingTransactionEntity): TransactionRequest {
         val items = itemsAdapter.fromJson(e.itemsJson) ?: emptyList()
         return TransactionRequest(
             items = items,
             discountAmount = e.discountAmount,
             cashReceived = e.cashReceived,
-            notes = e.notes
+            notes = e.notes,
+            clientCreatedAt = isoLocal(e.createdAt),
+            allowNegativeStock = true
         )
     }
+
+    /** Epoch millis -> ISO-8601 lokal (tanpa zona), sesuai LocalDateTime server. */
+    private fun isoLocal(millis: Long): String =
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+            .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
     /**
      * Total qty terjual pada transaksi yang BELUM tersinkron, per produk.
@@ -199,7 +210,7 @@ class OfflineTransactionStore @Inject constructor(
         )
     }
 
-    suspend fun markSynced(clientTxnId: String, serverId: Long, serverTrxNo: String) {
+    suspend fun markSynced(clientTxnId: String, serverId: Long, serverTrxNo: String, warning: String? = null) {
         val e = pendingDao.getById(clientTxnId) ?: return
         pendingDao.update(
             e.copy(
@@ -207,7 +218,8 @@ class OfflineTransactionStore @Inject constructor(
                 serverId = serverId,
                 serverTrxNo = serverTrxNo,
                 syncedAt = System.currentTimeMillis(),
-                lastError = null
+                // Simpan peringatan stok-minus dari server (bila ada) untuk ditinjau staf.
+                lastError = warning
             )
         )
     }
