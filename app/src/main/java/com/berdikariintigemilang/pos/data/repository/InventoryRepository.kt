@@ -26,25 +26,30 @@ class InventoryRepository @Inject constructor(
     suspend fun stocks(search: String?, lowStock: Boolean): ApiResult<List<StockDto>> = try {
         val res = api.stocks(search?.takeIf { it.isNotBlank() }, lowStock)
         if (res.success && res.data != null) ApiResult.Success(res.data)
-        else localStocks(search, lowStock) ?: ApiResult.Error(res.error?.message ?: res.message ?: "Gagal memuat stok")
+        else localStocksOrNull(search, lowStock) ?: ApiResult.Error(res.error?.message ?: res.message ?: "Gagal memuat stok")
     } catch (e: IOException) {
-        localStocks(search, lowStock) ?: ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
+        localStocksOrNull(search, lowStock) ?: ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
     } catch (e: HttpException) {
         ApiResult.Error(mapHttp(e.code()), httpStatus = e.code())
     } catch (e: Exception) {
-        localStocks(search, lowStock) ?: ApiResult.Error(e.message ?: "Gagal memuat stok")
+        localStocksOrNull(search, lowStock) ?: ApiResult.Error(e.message ?: "Gagal memuat stok")
     }
 
     /** Penyesuaian stok manual hanya saat online (perlu konfirmasi server). */
     suspend fun adjust(productId: Long, quantity: Int, notes: String): ApiResult<StockDto> =
         safePosCall { api.adjustStock(StockAdjustmentRequest(productId, quantity, notes)) }
 
-    private suspend fun localStocks(search: String?, lowStock: Boolean): ApiResult.Success<List<StockDto>>? {
+    /**
+     * Daftar saldo stok dari cache lokal (server − penjualan belum tersinkron).
+     * Dipakai untuk mode offline & kartu "stok menipis" di dashboard yang realtime.
+     * Mengembalikan list kosong bila cache stok belum ada.
+     */
+    suspend fun localStockList(search: String?, lowStock: Boolean): List<StockDto> {
         val stocks = localStockDao.getAll()
-        if (stocks.isEmpty()) return null
+        if (stocks.isEmpty()) return emptyList()
         val products = catalogDao.productsByIds(stocks.map { it.productId }).associateBy { it.id }
         val q = search?.trim()?.lowercase().orEmpty()
-        val rows = stocks.mapNotNull { st ->
+        return stocks.mapNotNull { st ->
             val p = products[st.productId] ?: return@mapNotNull null
             if (q.isNotEmpty() && !p.name.lowercase().contains(q) && !p.sku.lowercase().contains(q)) return@mapNotNull null
             val low = st.quantity <= st.minStock
@@ -60,7 +65,11 @@ class InventoryRepository @Inject constructor(
                 updatedAt = null
             )
         }.sortedBy { it.name }
-        return ApiResult.Success(rows)
+    }
+
+    private suspend fun localStocksOrNull(search: String?, lowStock: Boolean): ApiResult.Success<List<StockDto>>? {
+        if (localStockDao.count() == 0) return null
+        return ApiResult.Success(localStockList(search, lowStock))
     }
 
     private fun mapHttp(code: Int): String = when (code) {

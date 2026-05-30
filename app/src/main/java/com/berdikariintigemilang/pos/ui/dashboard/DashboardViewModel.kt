@@ -5,12 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.data.local.PendingTransactionEntity
-import com.berdikariintigemilang.pos.data.local.SyncStatus
 import com.berdikariintigemilang.pos.data.remote.DashboardSummaryDto
 import com.berdikariintigemilang.pos.data.remote.StockDto
 import com.berdikariintigemilang.pos.data.remote.TopProductDto
 import com.berdikariintigemilang.pos.data.remote.TransactionDto
 import com.berdikariintigemilang.pos.data.repository.DashboardRepository
+import com.berdikariintigemilang.pos.data.repository.InventoryRepository
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,15 +40,18 @@ data class DashboardUiState(
 )
 
 /**
- * Dashboard yang menggabungkan data server dengan transaksi lokal HP ini,
- * sehingga angka "hari ini" langsung mencerminkan penjualan offline (yang
- * belum tersinkron) dan diperbarui otomatis tiap ada transaksi baru. Saat
- * koneksi kembali, data server ditarik ulang.
+ * Dashboard yang sepenuhnya offline-capable & realtime: SEMUA kartu (omzet,
+ * transaksi, laba, rata-rata, grafik, produk terlaris, stok menipis) langsung
+ * mencerminkan transaksi lokal — termasuk penjualan offline yang belum
+ * tersinkron. Saat online, angka server menjadi basis dan transaksi lokal yang
+ * belum tersinkron ditambahkan di atasnya (tanpa dobel). Saat offline, seluruh
+ * angka dihitung dari data lokal HP ini.
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val dashboardRepository: DashboardRepository,
     private val transactionRepository: TransactionRepository,
+    private val inventoryRepository: InventoryRepository,
     private val offlineStore: OfflineTransactionStore,
     private val connectivity: ConnectivityObserver
 ) : ViewModel() {
@@ -58,8 +61,10 @@ class DashboardViewModel @Inject constructor(
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
 
-    // Data server terakhir + transaksi lokal terkini.
+    // Cache data server terakhir + transaksi lokal terkini.
     private var serverSummary: DashboardSummaryDto? = null
+    private var serverTop: List<TopProductDto> = emptyList()
+    private var serverLowStock: List<StockDto> = emptyList()
     private var serverPoints: List<ChartPoint> = emptyList()
     private var serverFresh = false
     private var localTxns: List<PendingTransactionEntity> = emptyList()
@@ -75,7 +80,6 @@ class DashboardViewModel @Inject constructor(
             connectivity.isOnline.collect { on ->
                 val was = online
                 online = on
-                _state.update { it.copy(offline = !on) }
                 if (on && !was) load() else rebuild()
             }
         }
@@ -91,7 +95,7 @@ class DashboardViewModel @Inject constructor(
         if (!connectivity.isOnlineNow()) {
             online = false
             _state.update { it.copy(loading = false, refreshing = false, offline = true) }
-            rebuild()
+            viewModelScope.launch { rebuild() }
             return
         }
         val date = LocalDate.now().toString()
@@ -103,12 +107,8 @@ class DashboardViewModel @Inject constructor(
                 is ApiResult.Success -> { serverSummary = summary.data; serverFresh = true }
                 is ApiResult.Error -> _state.update { it.copy(error = summary.message) }
             }
-            (dashboardRepository.topProducts(date) as? ApiResult.Success)?.let { res ->
-                _state.update { it.copy(topProducts = res.data) }
-            }
-            (dashboardRepository.lowStock() as? ApiResult.Success)?.let { res ->
-                _state.update { it.copy(lowStock = res.data) }
-            }
+            (dashboardRepository.topProducts(date) as? ApiResult.Success)?.let { serverTop = it.data }
+            (dashboardRepository.lowStock() as? ApiResult.Success)?.let { serverLowStock = it.data }
             serverPoints = loadServerTodayPoints()
             online = true
             _state.update { it.copy(loading = false, refreshing = false, offline = false) }
@@ -141,40 +141,69 @@ class DashboardViewModel @Inject constructor(
     }
 
     /**
-     * Gabungkan data server dengan transaksi lokal HARI INI:
-     * - Online & data server ada: tambahkan transaksi lokal yang BELUM tersinkron
-     *   (yang sudah tersinkron sudah masuk angka server -> tak digandakan).
-     * - Offline: pakai seluruh transaksi lokal hari ini sebagai sumber angka.
+     * Gabungkan data server + transaksi lokal HARI INI ke seluruh kartu dashboard.
+     * Online: basis = server, overlay = transaksi lokal belum tersinkron.
+     * Offline: seluruhnya dari transaksi lokal hari ini.
      */
-    private fun rebuild() {
+    private suspend fun rebuild() {
         val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val localToday = localTxns.filter { it.createdAt >= todayStart }
         val serverAvailable = online && serverFresh
-        val overlay = if (serverAvailable) localToday.filter { it.status != SyncStatus.SYNCED.name } else localToday
+        val includeSynced = !serverAvailable
 
-        val overlayPoints = overlay.sortedBy { it.createdAt }.map {
-            ChartPoint(
-                label = LocalDateTime.ofInstant(Instant.ofEpochMilli(it.createdAt), ZoneId.systemDefault()).format(timeFmt),
-                value = it.totalAmount
-            )
-        }
+        val agg = offlineStore.aggregateLocalSales(todayStart, includeSynced)
 
+        // Titik grafik dari transaksi lokal (filter sama dengan agregat).
+        val overlayPoints = localTxns
+            .filter { it.createdAt >= todayStart && (includeSynced || it.status != "SYNCED") }
+            .sortedBy { it.createdAt }
+            .map {
+                ChartPoint(
+                    label = LocalDateTime.ofInstant(Instant.ofEpochMilli(it.createdAt), ZoneId.systemDefault()).format(timeFmt),
+                    value = it.totalAmount
+                )
+            }
+
+        // ── Ringkasan ──
         val baseSales = if (serverAvailable) serverSummary?.totalSales ?: 0.0 else 0.0
         val baseCount = if (serverAvailable) serverSummary?.totalTransactions ?: 0 else 0
         val baseProfit = if (serverAvailable) serverSummary?.totalProfit ?: 0.0 else 0.0
-
-        val totalSales = baseSales + overlay.sumOf { it.totalAmount }
-        val totalCount = baseCount + overlay.size
-        val avg = if (totalCount > 0) totalSales / totalCount else 0.0
-
-        val merged = DashboardSummaryDto(
+        val totalSales = baseSales + agg.totalSales
+        val totalCount = baseCount + agg.count
+        val totalProfit = baseProfit + agg.totalProfit
+        val summary = DashboardSummaryDto(
             date = LocalDate.now().toString(),
             totalSales = totalSales,
             totalTransactions = totalCount,
-            totalProfit = baseProfit,
-            avgTransactionValue = avg
+            totalProfit = totalProfit,
+            avgTransactionValue = if (totalCount > 0) totalSales / totalCount else 0.0
         )
+
+        // ── Produk terlaris (gabung server + lokal, urut ulang) ──
+        val merged = LinkedHashMap<Long, TopProductDto>()
+        if (serverAvailable) serverTop.forEach { merged[it.productId] = it }
+        agg.products.forEach { lp ->
+            val ex = merged[lp.productId]
+            merged[lp.productId] = ex?.copy(
+                quantitySold = ex.quantitySold + lp.quantitySold,
+                totalSales = ex.totalSales + lp.totalSales
+            ) ?: TopProductDto(lp.productId, lp.sku, lp.name, lp.quantitySold, lp.totalSales)
+        }
+        val topProducts = merged.values.sortedByDescending { it.quantitySold }.take(5)
+
+        // ── Stok menipis dari cache lokal (realtime); fallback server bila cache kosong ──
+        val localLow = inventoryRepository.localStockList(null, lowStock = true)
+        val lowStock = if (localLow.isNotEmpty() || serverLowStock.isEmpty()) localLow else serverLowStock
+
         val basePoints = if (serverAvailable) serverPoints else emptyList()
-        _state.update { it.copy(summary = merged, todayTransactions = basePoints + overlayPoints) }
+
+        _state.update {
+            it.copy(
+                summary = summary,
+                topProducts = topProducts,
+                lowStock = lowStock,
+                todayTransactions = basePoints + overlayPoints,
+                offline = !online
+            )
+        }
     }
 }

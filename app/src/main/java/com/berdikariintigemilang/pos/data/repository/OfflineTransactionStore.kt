@@ -31,6 +31,23 @@ import javax.inject.Singleton
  * dipakai sebagai idempotency key di semua percobaan kirim — sehingga retry
  * tidak pernah membuat transaksi dobel.
  */
+/** Agregat penjualan per produk dari data lokal (untuk dashboard offline). */
+data class LocalProductAgg(
+    val productId: Long,
+    val name: String,
+    val sku: String,
+    val quantitySold: Int,
+    val totalSales: Double
+)
+
+/** Ringkasan penjualan lokal (untuk dashboard realtime/offline). */
+data class LocalSalesAgg(
+    val totalSales: Double = 0.0,
+    val totalProfit: Double = 0.0,
+    val count: Int = 0,
+    val products: List<LocalProductAgg> = emptyList()
+)
+
 @Singleton
 class OfflineTransactionStore @Inject constructor(
     private val pendingDao: PendingTransactionDao,
@@ -138,6 +155,48 @@ class OfflineTransactionStore @Inject constructor(
                 }
             }
         return map
+    }
+
+    /**
+     * Agregasi penjualan lokal sejak [sinceMillis] untuk dashboard.
+     * [includeSynced]=false hanya menghitung transaksi yang belum tersinkron
+     * (dipakai sebagai overlay saat online); =true menghitung semua transaksi
+     * lokal (dipakai saat offline). Laba ≈ (subtotal − diskon − bundle) − HPP.
+     */
+    suspend fun aggregateLocalSales(sinceMillis: Long, includeSynced: Boolean): LocalSalesAgg {
+        val txns = pendingDao.getAllOnce().filter {
+            it.createdAt >= sinceMillis && (includeSynced || it.status != SyncStatus.SYNCED.name)
+        }
+        if (txns.isEmpty()) return LocalSalesAgg()
+        var totalSales = 0.0
+        var netRevenue = 0.0
+        val qtyById = HashMap<Long, Int>()
+        txns.forEach { e ->
+            totalSales += e.totalAmount
+            netRevenue += (e.subtotal - e.discountAmount - e.bundleDiscount)
+            (itemsAdapter.fromJson(e.itemsJson) ?: emptyList()).forEach { item ->
+                qtyById.merge(item.productId, item.quantity, Int::plus)
+            }
+        }
+        val products = catalogDao.productsByIds(qtyById.keys.toList()).associateBy { it.id }
+        var cost = 0.0
+        val productAggs = qtyById.map { (pid, qty) ->
+            val p = products[pid]
+            cost += (p?.purchasePrice ?: 0.0) * qty
+            LocalProductAgg(
+                productId = pid,
+                name = p?.name ?: "Produk #$pid",
+                sku = p?.sku ?: "",
+                quantitySold = qty,
+                totalSales = (p?.sellingPrice ?: 0.0) * qty
+            )
+        }.sortedByDescending { it.quantitySold }
+        return LocalSalesAgg(
+            totalSales = totalSales,
+            totalProfit = netRevenue - cost,
+            count = txns.size,
+            products = productAggs
+        )
     }
 
     suspend fun markSynced(clientTxnId: String, serverId: Long, serverTrxNo: String) {
