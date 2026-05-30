@@ -43,7 +43,7 @@ import com.berdikariintigemilang.pos.ui.components.PrimaryButton
 @Composable
 fun PaymentScreen(
     onBack: () -> Unit,
-    onPaid: (Long) -> Unit,
+    onPaid: (String) -> Unit,
     viewModel: PaymentViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()

@@ -82,7 +82,7 @@ class OfflineTransactionStore @Inject constructor(
                 total = result.total,
                 cashReceived = cashReceived,
                 change = change,
-                pendingSync = true
+                pendingSync = false
             ),
             setting
         )
