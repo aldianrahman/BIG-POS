@@ -46,6 +46,7 @@ class OfflineTransactionStore @Inject constructor(
 
     fun observeAll(): Flow<List<PendingTransactionEntity>> = pendingDao.observeAll()
     fun observeUnsyncedCount(): Flow<Int> = pendingDao.observeUnsyncedCount()
+    suspend fun all(): List<PendingTransactionEntity> = pendingDao.getAllOnce()
     suspend fun getById(clientTxnId: String): PendingTransactionEntity? = pendingDao.getById(clientTxnId)
     suspend fun pendingForSync(): List<PendingTransactionEntity> = pendingDao.pendingForSync()
 

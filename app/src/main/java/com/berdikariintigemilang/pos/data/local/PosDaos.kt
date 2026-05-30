@@ -26,6 +26,9 @@ interface PendingTransactionDao {
     @Query("SELECT * FROM pending_transactions ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<PendingTransactionEntity>>
 
+    @Query("SELECT * FROM pending_transactions ORDER BY createdAt DESC")
+    suspend fun getAllOnce(): List<PendingTransactionEntity>
+
     /** Jumlah transaksi yang belum tersinkron (untuk indikator status). */
     @Query("SELECT COUNT(*) FROM pending_transactions WHERE status IN ('PENDING','FAILED')")
     fun observeUnsyncedCount(): Flow<Int>

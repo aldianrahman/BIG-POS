@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -37,12 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.util.Formatters
-import com.berdikariintigemilang.pos.data.remote.TransactionDto
 import com.berdikariintigemilang.pos.ui.components.AppCard
 import com.berdikariintigemilang.pos.ui.components.EmptyState
 import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
@@ -52,13 +54,13 @@ import com.berdikariintigemilang.pos.ui.components.StatusChip
 @Composable
 fun TransactionHistoryScreen(
     onBack: () -> Unit,
-    onOpenReceipt: (Long) -> Unit,
+    onOpenReceipt: (String) -> Unit,
     viewModel: TransactionHistoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
-    var voidTarget by remember { mutableStateOf<TransactionDto?>(null) }
+    var voidTarget by remember { mutableStateOf<TrxRow?>(null) }
 
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
@@ -74,12 +76,7 @@ fun TransactionHistoryScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        "Riwayat Transaksi",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                },
+                title = { Text("Riwayat Transaksi", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
@@ -114,20 +111,21 @@ fun TransactionHistoryScreen(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(state.items, key = { it.id }) { trx ->
+                    if (state.offline) {
+                        item { OfflineNotice() }
+                    }
+                    items(state.items, key = { it.ref }) { trx ->
                         TransactionRow(
                             trx = trx,
-                            isAdmin = state.isAdmin,
-                            onReprint = { onOpenReceipt(trx.id) },
+                            showVoid = state.isAdmin && !state.offline && trx.serverId != null &&
+                                trx.statusKind == TrxStatusKind.DONE,
+                            onReprint = { onOpenReceipt(trx.ref) },
                             onVoid = { voidTarget = trx }
                         )
                     }
                     if (state.loadingMore) {
                         item {
-                            Box(
-                                Modifier.fillMaxWidth().padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(8.dp)
@@ -144,21 +142,49 @@ fun TransactionHistoryScreen(
         VoidDialog(
             trxNo = trx.trxNo,
             onDismiss = { voidTarget = null },
-            onConfirm = { reason -> viewModel.void(trx.id, reason); voidTarget = null }
+            onConfirm = { reason ->
+                trx.serverId?.let { viewModel.void(it, reason) }
+                voidTarget = null
+            }
         )
+    }
+}
+
+@Composable
+private fun OfflineNotice() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.tertiaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Filled.CloudOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.height(18.dp)
+            )
+            Text(
+                "Mode offline · menampilkan transaksi dari HP ini",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TransactionRow(
-    trx: TransactionDto,
-    isAdmin: Boolean,
+    trx: TrxRow,
+    showVoid: Boolean,
     onReprint: () -> Unit,
     onVoid: () -> Unit
 ) {
-    val voided = trx.status == "VOIDED"
-
     AppCard(onClick = onReprint) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
@@ -174,14 +200,11 @@ private fun TransactionRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
-                StatusChip(
-                    text = if (voided) "VOID" else "SELESAI",
-                    container = if (voided) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
-                    content = if (voided) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                val (container, content) = statusColors(trx.statusKind)
+                StatusChip(text = trx.statusLabel, container = container, content = content)
             }
             Text(
-                Formatters.displayDateTime(trx.createdAt),
+                trx.dateText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -204,25 +227,27 @@ private fun TransactionRow(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = onReprint) {
-                        Text(
-                            "Cetak Ulang",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Text("Cetak Ulang", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     }
-                    if (isAdmin && !voided) {
+                    if (showVoid) {
                         TextButton(onClick = onVoid) {
-                            Text(
-                                "Void",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.error
-                            )
+                            Text("Void", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun statusColors(kind: TrxStatusKind): Pair<Color, Color> = when (kind) {
+    TrxStatusKind.DONE, TrxStatusKind.SYNCED ->
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+    TrxStatusKind.PENDING ->
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+    TrxStatusKind.CONFLICT, TrxStatusKind.VOID ->
+        MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.error
 }
 
 @Composable
