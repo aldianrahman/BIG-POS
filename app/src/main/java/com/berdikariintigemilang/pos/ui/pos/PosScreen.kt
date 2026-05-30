@@ -38,6 +38,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.util.Formatters
+import com.berdikariintigemilang.pos.core.util.scanFeedback
 import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.data.cart.DiscountMode
 import com.berdikariintigemilang.pos.ui.components.EmptyState
@@ -75,8 +79,23 @@ fun PosScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var editingLine by remember { mutableStateOf<CartLine?>(null) }
+    val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
 
-    Column(modifier = modifier.fillMaxSize().imePadding()) {
+    // Alat scan barcode fisik (HID) memancarkan barcode utuh; tiap scan langsung
+    // menambah 1 ke keranjang. Kolektor ini hanya aktif selagi layar Kasir tampil.
+    LaunchedEffect(Unit) {
+        viewModel.scannedBarcodes.collect { viewModel.onScannedBarcode(it) }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.scanFeedback.collect { scanFeedback(context) }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { snackbar.showSnackbar(it) }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // ── Pencarian + aksi (latar putih) ──────────────────────────────────
         Row(
             modifier = Modifier
@@ -211,6 +230,14 @@ fun PosScreen(
             onDiscountInputChange = viewModel::setDiscountInput,
             onDiscountModeChange = viewModel::setDiscountMode,
             onCheckout = onCheckout
+        )
+    }
+
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
         )
     }
 

@@ -1,13 +1,6 @@
 package com.berdikariintigemilang.pos.ui.pos
 
 import android.Manifest
-import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.os.Handler
-import android.os.Looper
-import android.os.VibrationEffect
-import android.os.Vibrator
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -54,6 +47,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.berdikariintigemilang.pos.core.util.scanFeedback
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -314,29 +308,5 @@ private fun ScanOverlay() {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
-    }
-}
-
-/** Umpan balik scan sukses: bunyi beep + getar (keduanya aman bila gagal). */
-private fun scanFeedback(context: Context) {
-    beep()
-    vibrate(context)
-}
-
-private fun beep() {
-    try {
-        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 90)
-        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 180)
-        // Lepaskan resource setelah tone selesai.
-        Handler(Looper.getMainLooper()).postDelayed({ tone.release() }, 250)
-    } catch (_: Exception) {
-    }
-}
-
-private fun vibrate(context: Context) {
-    try {
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
-        vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
-    } catch (_: Exception) {
     }
 }

@@ -3,6 +3,7 @@ package com.berdikariintigemilang.pos.ui.pos
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.network.ApiResult
+import com.berdikariintigemilang.pos.core.scanner.HardwareScannerBus
 import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.cart.DiscountMode
@@ -11,13 +12,17 @@ import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
 import com.berdikariintigemilang.pos.data.remote.taxFor
 import com.berdikariintigemilang.pos.data.remote.totalFor
 import com.berdikariintigemilang.pos.data.repository.BundleRepository
+import com.berdikariintigemilang.pos.data.repository.ProductRepository
 import com.berdikariintigemilang.pos.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,11 +51,28 @@ private data class BundleCalc(val discount: Double = 0.0, val applied: List<Appl
 class PosViewModel @Inject constructor(
     private val cartManager: CartManager,
     private val bundleRepository: BundleRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val productRepository: ProductRepository,
+    scannerBus: HardwareScannerBus
 ) : ViewModel() {
 
     private val bundle = MutableStateFlow(BundleCalc())
     private val tax = MutableStateFlow<ReceiptSettingDto?>(null)
+
+    /** Barcode dari alat scan fisik (HID). Dikoleksi oleh layar Kasir saja. */
+    val scannedBarcodes: SharedFlow<String> = scannerBus.barcodes
+
+    // Sinyal beep+getar saat sebuah item berhasil masuk keranjang via scan.
+    private val _scanFeedback = Channel<Unit>(Channel.BUFFERED)
+    val scanFeedback = _scanFeedback.receiveAsFlow()
+
+    // Pesan singkat (mis. tidak ditemukan / stok kurang) untuk snackbar.
+    private val _messages = Channel<String>(Channel.BUFFERED)
+    val messages = _messages.receiveAsFlow()
+
+    // Cegah pembacaan ganda super cepat (auto-sense / double-fire) untuk kode sama.
+    private var lastScanCode: String? = null
+    private var lastScanAt = 0L
 
     init {
         viewModelScope.launch {
@@ -105,4 +127,36 @@ class PosViewModel @Inject constructor(
     fun setDiscountInput(value: Double) = cartManager.setDiscountInput(value)
     fun setDiscountMode(mode: DiscountMode) = cartManager.setDiscountMode(mode)
     fun clear() = cartManager.clear()
+
+    /**
+     * Barcode hasil scan alat fisik: cari produk lalu langsung tambah 1 ke
+     * keranjang (tanpa dialog). Beri umpan balik beep+getar saat berhasil;
+     * tampilkan pesan bila tidak ditemukan atau stok tidak mencukupi.
+     */
+    fun onScannedBarcode(code: String) {
+        val barcode = code.trim()
+        if (barcode.isEmpty()) return
+        val now = System.currentTimeMillis()
+        if (barcode == lastScanCode && now - lastScanAt < SAME_CODE_DEBOUNCE_MS) return
+        lastScanCode = barcode
+        lastScanAt = now
+        viewModelScope.launch {
+            when (val res = productRepository.byBarcode(barcode)) {
+                is ApiResult.Success -> {
+                    if (cartManager.addProduct(res.data, 1)) {
+                        _scanFeedback.send(Unit)
+                    } else {
+                        _messages.send("Stok ${res.data.name} tidak mencukupi")
+                    }
+                }
+                is ApiResult.Error -> _messages.send(
+                    if (res.httpStatus == 404) "Barcode $barcode tidak ditemukan" else res.message
+                )
+            }
+        }
+    }
+
+    private companion object {
+        const val SAME_CODE_DEBOUNCE_MS = 400L
+    }
 }
