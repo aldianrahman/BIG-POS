@@ -24,11 +24,12 @@ android {
     buildTypes {
         debug {
             // Emulator -> host backend; ganti ke IP LAN untuk device fisik.
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/\"")
+//            buildConfigField("String", "BASE_URL", "\"http://10.42.0.1:8080/\"")
+            buildConfigField("String", "BASE_URL", "\"https://berdikariintigemilang.online/\"")
         }
         release {
             isMinifyEnabled = false
-            buildConfigField("String", "BASE_URL", "\"https://your-backend-domain/\"")
+            buildConfigField("String", "BASE_URL", "\"https://berdikariintigemilang.online/\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
