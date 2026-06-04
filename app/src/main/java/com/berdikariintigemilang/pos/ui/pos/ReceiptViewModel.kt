@@ -8,6 +8,7 @@ import com.berdikariintigemilang.pos.core.datastore.SavedPrinter
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.printer.PrinterException
 import com.berdikariintigemilang.pos.core.printer.PrinterManager
+import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -30,12 +31,14 @@ data class ReceiptUiState(
 @HiltViewModel
 class ReceiptViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
+    private val offlineStore: OfflineTransactionStore,
     private val printerStore: PrinterStore,
     private val printerManager: PrinterManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    val trxId: Long = savedStateHandle.get<String>("trxId")?.toLongOrNull() ?: 0L
+    /** Referensi struk: clientTxnId (UUID transaksi lokal) atau id server (riwayat). */
+    private val trxRef: String = savedStateHandle.get<String>("trxId").orEmpty()
 
     private val _state = MutableStateFlow(ReceiptUiState())
     val state: StateFlow<ReceiptUiState> = _state
@@ -58,7 +61,35 @@ class ReceiptViewModel @Inject constructor(
     fun loadReceipt() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            when (val res = transactionRepository.receipt(trxId)) {
+            // 1) Transaksi hasil checkout di HP ini.
+            val local = offlineStore.getById(trxRef)
+            if (local != null) {
+                val serverId = local.serverId
+                // Sudah tersinkron & ada koneksi: tampilkan struk resmi server (nomor INV final).
+                if (serverId != null) {
+                    val res = transactionRepository.receipt(serverId)
+                    if (res is ApiResult.Success) {
+                        _state.update { it.copy(loading = false, trxNo = res.data.trxNo, content = res.data.content) }
+                        return@launch
+                    }
+                }
+                // Offline / belum sinkron: pakai struk lokal yang sudah tersusun.
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        trxNo = local.serverTrxNo ?: local.offlineTrxNo,
+                        content = local.receiptContent
+                    )
+                }
+                return@launch
+            }
+            // 2) Fallback: ambil dari server berdasarkan id (riwayat transaksi tersinkron).
+            val id = trxRef.toLongOrNull()
+            if (id == null) {
+                _state.update { it.copy(loading = false, error = "Struk tidak ditemukan") }
+                return@launch
+            }
+            when (val res = transactionRepository.receipt(id)) {
                 is ApiResult.Success -> _state.update {
                     it.copy(loading = false, trxNo = res.data.trxNo, content = res.data.content)
                 }

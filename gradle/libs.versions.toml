@@ -24,6 +24,9 @@ camerax = "1.3.4"
 mlkitBarcode = "17.3.0"
 accompanistPermissions = "0.36.0"
 escposThermalPrinter = "3.4.0"
+room = "2.6.1"
+workManager = "2.9.1"
+hiltWork = "1.2.0"
 
 [libraries]
 # AndroidX core
@@ -78,6 +81,16 @@ accompanist-permissions = { group = "com.google.accompanist", name = "accompanis
 
 # Thermal printer ESC/POS (dipakai mulai Task 6)
 escpos-thermalprinter = { group = "com.github.DantSu", name = "ESCPOS-ThermalPrinter-Android", version.ref = "escposThermalPrinter" }
+
+# Room (DB lokal offline-first)
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# WorkManager + Hilt Worker (sinkronisasi latar belakang)
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
 
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }

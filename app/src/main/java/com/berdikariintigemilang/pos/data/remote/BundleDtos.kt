@@ -26,3 +26,22 @@ data class BundleCalcResult(
     val bundleDiscount: Double = 0.0,
     val appliedBundles: List<AppliedBundleDto> = emptyList()
 )
+
+/** Item penyusun bundle (untuk di-cache & dihitung offline). */
+@JsonClass(generateAdapter = true)
+data class BundleListItemDto(
+    val productId: Long = 0,
+    val quantity: Int = 0
+)
+
+/** Definisi bundle dari GET /api/pos/bundles (di-cache untuk perhitungan offline). */
+@JsonClass(generateAdapter = true)
+data class BundleListDto(
+    val id: Long = 0,
+    val name: String = "",
+    val bundlePrice: Double = 0.0,
+    val isActive: Boolean = true,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val items: List<BundleListItemDto> = emptyList()
+)

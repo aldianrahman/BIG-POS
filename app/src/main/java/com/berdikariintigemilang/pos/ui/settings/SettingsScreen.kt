@@ -23,9 +23,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -142,6 +144,33 @@ fun SettingsScreen(
                             title = "Riwayat Transaksi & Cetak Ulang",
                             subtitle = "Lihat & cetak ulang transaksi lama",
                             onClick = onTransactions
+                        )
+                    }
+                }
+
+                // ── Sinkronisasi ────────────────────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel("Sinkronisasi Data")
+                    SettingsCard {
+                        SettingsRow(
+                            icon = Icons.Filled.Sync,
+                            title = if (state.syncing) "Menyinkronkan..." else "Sinkron Sekarang",
+                            subtitle = if (state.isOnline)
+                                (if (state.pendingCount > 0) "${state.pendingCount} transaksi menunggu kirim"
+                                else "Semua transaksi tersinkron")
+                            else "Mode offline · ${state.pendingCount} transaksi menunggu",
+                            subtitleColor = if (state.pendingCount > 0) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            enabled = !state.syncing,
+                            onClick = viewModel::syncNow
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                        SettingsRow(
+                            icon = Icons.Filled.CloudDownload,
+                            title = if (state.refreshingCatalog) "Memperbarui..." else "Perbarui Katalog & Stok",
+                            subtitle = "Unduh produk & stok terbaru untuk persiapan offline",
+                            enabled = !state.refreshingCatalog,
+                            onClick = viewModel::refreshCatalog
                         )
                     }
                 }
