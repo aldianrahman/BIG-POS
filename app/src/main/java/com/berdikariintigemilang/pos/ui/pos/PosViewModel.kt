@@ -11,13 +11,16 @@ import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
 import com.berdikariintigemilang.pos.data.remote.taxFor
 import com.berdikariintigemilang.pos.data.remote.totalFor
 import com.berdikariintigemilang.pos.data.repository.BundleRepository
+import com.berdikariintigemilang.pos.data.repository.ProductRepository
 import com.berdikariintigemilang.pos.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,11 +49,22 @@ private data class BundleCalc(val discount: Double = 0.0, val applied: List<Appl
 class PosViewModel @Inject constructor(
     private val cartManager: CartManager,
     private val bundleRepository: BundleRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val productRepository: ProductRepository
 ) : ViewModel() {
 
     private val bundle = MutableStateFlow(BundleCalc())
     private val tax = MutableStateFlow<ReceiptSettingDto?>(null)
+
+    // Event scan hardware sukses (untuk beep + getar) & pesan singkat (toast).
+    private val _scanned = Channel<Unit>(Channel.BUFFERED)
+    val scanned = _scanned.receiveAsFlow()
+    private val _scanMessages = Channel<String>(Channel.BUFFERED)
+    val scanMessages = _scanMessages.receiveAsFlow()
+
+    // Anti dobel-baca dari satu kali scan (DataWedge kadang mengirim ganda).
+    private var lastScanCode: String? = null
+    private var lastScanAt = 0L
 
     init {
         viewModelScope.launch {
@@ -105,4 +119,34 @@ class PosViewModel @Inject constructor(
     fun setDiscountInput(value: Double) = cartManager.setDiscountInput(value)
     fun setDiscountMode(mode: DiscountMode) = cartManager.setDiscountMode(mode)
     fun clear() = cartManager.clear()
+
+    /**
+     * Scan dari scanner hardware Zebra (DataWedge) di halaman kasir: cari produk
+     * berdasarkan barcode, lalu langsung tambah qty 1 ke keranjang (akumulatif
+     * bila sudah ada). Umpan balik via [scanned] (beep/getar) & [scanMessages].
+     */
+    fun onHardwareScan(raw: String) {
+        val code = raw.trim()
+        if (code.isEmpty()) return
+        val now = System.currentTimeMillis()
+        if (code == lastScanCode && now - lastScanAt < 700) return
+        lastScanCode = code
+        lastScanAt = now
+        viewModelScope.launch {
+            when (val res = productRepository.byBarcode(code)) {
+                is ApiResult.Success -> {
+                    val product = res.data
+                    if (cartManager.addProduct(product, 1)) {
+                        _scanned.send(Unit)
+                        _scanMessages.send("${product.name} +1")
+                    } else {
+                        _scanMessages.send("Stok ${product.name} tidak mencukupi")
+                    }
+                }
+                is ApiResult.Error -> _scanMessages.send(
+                    if (res.httpStatus == 404) "Barcode $code tidak ada di database" else res.message
+                )
+            }
+        }
+    }
 }
