@@ -19,6 +19,7 @@ object Routes {
     fun shiftClose(shiftId: Long) = "shift_close/$shiftId"
     fun zReport(shiftId: Long) = "z_report/$shiftId"
     fun receipt(trxId: Long) = "receipt/$trxId"
+    fun receipt(clientTxnId: String) = "receipt/$clientTxnId"
     fun productDetail(productId: Long) = "product_detail/$productId"
     fun productEdit(productId: Long) = "product_edit/$productId"
 }

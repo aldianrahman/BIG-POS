@@ -24,10 +24,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalOffer
@@ -78,6 +80,8 @@ fun PosScreen(
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val pendingCount by viewModel.pendingCount.collectAsState()
     var editingLine by remember { mutableStateOf<CartLine?>(null) }
     val context = LocalContext.current
 
@@ -90,6 +94,7 @@ fun PosScreen(
     }
 
     Column(modifier = modifier.fillMaxSize().imePadding()) {
+        OfflineStatusBar(isOnline = isOnline, pendingCount = pendingCount, onSync = viewModel::syncNow)
         // ── Pencarian + aksi (latar putih) ──────────────────────────────────
         Row(
             modifier = Modifier
@@ -565,3 +570,48 @@ private fun DiscountModeCell(label: String, selected: Boolean, onClick: () -> Un
 
 private fun formatDiscountInput(value: Double): String =
     if (value > 0) value.toLong().toString() else ""
+
+/** Strip status: tampil saat offline atau ada transaksi menunggu kirim. */
+@Composable
+private fun OfflineStatusBar(isOnline: Boolean, pendingCount: Int, onSync: () -> Unit) {
+    if (isOnline && pendingCount == 0) return
+    val offline = !isOnline
+    val bg = if (offline) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
+    val fg = if (offline) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+    Surface(color = bg, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                if (offline) Icons.Filled.CloudOff else Icons.Filled.Sync,
+                contentDescription = null,
+                tint = fg,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = when {
+                    offline && pendingCount > 0 -> "Mode offline · $pendingCount transaksi menunggu kirim"
+                    offline -> "Mode offline · transaksi disimpan aman di HP"
+                    else -> "$pendingCount transaksi menunggu sinkron"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = fg,
+                modifier = Modifier.weight(1f)
+            )
+            if (!offline && pendingCount > 0) {
+                Text(
+                    "Sinkron",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = fg,
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.small)
+                        .clickable(onClick = onSync)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
