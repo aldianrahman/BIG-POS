@@ -65,7 +65,7 @@ fun ProductEditScreen(
     var desc by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("LUBY") }
     var unit by remember { mutableStateOf("PCS") }
-    var buy by remember { mutableStateOf("0") }
+    var buy by remember { mutableStateOf("") } // Harga Beli opsional, boleh kosong
     var sell by remember { mutableStateOf("0") }
     var minStock by remember { mutableStateOf("0") }
     var initialStock by remember { mutableStateOf("0") }
@@ -80,7 +80,8 @@ fun ProductEditScreen(
         if (!state.loading && !prefilled) {
             state.product?.let { p ->
                 sku = p.sku; barcode = p.barcode ?: ""; name = p.name; desc = p.description ?: ""
-                brand = p.brand; unit = p.unit; buy = p.purchasePrice.toLong().toString()
+                brand = p.brand; unit = p.unit
+                buy = if (p.purchasePrice > 0) p.purchasePrice.toLong().toString() else "" // kosong bila belum diisi
                 sell = p.sellingPrice.toLong().toString(); minStock = (p.minStock ?: 0).toString()
                 categoryId = p.categoryId
             }
@@ -149,7 +150,7 @@ fun ProductEditScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SectionTitle(title = "Harga", icon = Icons.Filled.AttachMoney)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        NumField("Harga Beli", buy, Modifier.weight(1f)) { buy = it }
+                        NumField("Harga Beli (Opsional)", buy, Modifier.weight(1f)) { buy = it }
                         NumField("Harga Jual", sell, Modifier.weight(1f)) { sell = it }
                     }
                 }

@@ -77,6 +77,11 @@ fun ReportsScreen(
                 )
                 StatTile("Margin", Formatters.percent(p?.marginPercent), Icons.Filled.ReceiptLong, Modifier.weight(1f))
             }
+            Text(
+                "HPP, Profit & Margin dihitung dari Harga Beli. Produk tanpa Harga Beli dianggap HPP Rp0, jadi profit bersifat estimasi.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             SectionLabel("Penjualan per")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
