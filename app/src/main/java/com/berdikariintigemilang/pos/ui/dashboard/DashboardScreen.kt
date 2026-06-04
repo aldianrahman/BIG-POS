@@ -94,6 +94,11 @@ fun DashboardScreen(
                 )
                 StatTile("Rata-rata", Formatters.rupiah(s?.avgTransactionValue), Icons.Filled.BarChart, Modifier.weight(1f))
             }
+            Text(
+                "Profit estimasi — produk tanpa Harga Beli dihitung HPP Rp0.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             if (state.todayTransactions.isNotEmpty()) {
                 TodayTransactionsCard(state.todayTransactions)

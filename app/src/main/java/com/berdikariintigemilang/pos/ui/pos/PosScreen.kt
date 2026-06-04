@@ -1,5 +1,6 @@
 package com.berdikariintigemilang.pos.ui.pos
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,13 +55,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.berdikariintigemilang.pos.core.scanner.DataWedgeScanner
 import com.berdikariintigemilang.pos.core.util.Formatters
+import com.berdikariintigemilang.pos.core.util.scanFeedback
 import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.data.cart.DiscountMode
 import com.berdikariintigemilang.pos.ui.components.EmptyState
@@ -79,6 +83,15 @@ fun PosScreen(
     val isOnline by viewModel.isOnline.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
     var editingLine by remember { mutableStateOf<CartLine?>(null) }
+    val context = LocalContext.current
+
+    // Scanner hardware Zebra (DataWedge): aktif selama halaman kasir tampil.
+    // Scan barcode → produk langsung ditambahkan (qty 1) bila ada di database.
+    DataWedgeScanner(onScan = viewModel::onHardwareScan)
+    LaunchedEffect(Unit) { viewModel.scanned.collect { scanFeedback(context) } }
+    LaunchedEffect(Unit) {
+        viewModel.scanMessages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
 
     Column(modifier = modifier.fillMaxSize().imePadding()) {
         OfflineStatusBar(isOnline = isOnline, pendingCount = pendingCount, onSync = viewModel::syncNow)
