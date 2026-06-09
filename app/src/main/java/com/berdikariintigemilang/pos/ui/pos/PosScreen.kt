@@ -33,7 +33,12 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PointOfSale
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -41,8 +46,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -77,12 +85,15 @@ fun PosScreen(
     onSearchClick: () -> Unit = {},
     onCheckout: () -> Unit = {},
     onHistory: () -> Unit = {},
+    onOpenHeld: () -> Unit = {},
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
+    val heldCount by viewModel.heldCount.collectAsState()
     var editingLine by remember { mutableStateOf<CartLine?>(null) }
+    var showHoldDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Scanner hardware Zebra (DataWedge): aktif selama halaman kasir tampil.
@@ -129,6 +140,28 @@ fun PosScreen(
                 )
             ) {
                 Icon(Icons.Filled.CropFree, contentDescription = "Scan barcode")
+            }
+            BadgedBox(
+                badge = {
+                    if (heldCount > 0) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) { Text("$heldCount") }
+                    }
+                }
+            ) {
+                FilledIconButton(
+                    onClick = onOpenHeld,
+                    modifier = Modifier.size(54.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Icon(Icons.Outlined.Schedule, contentDescription = "Transaksi gantung")
+                }
             }
             FilledIconButton(
                 onClick = onHistory,
@@ -228,6 +261,7 @@ fun PosScreen(
             canCheckout = state.canCheckout,
             onDiscountInputChange = viewModel::setDiscountInput,
             onDiscountModeChange = viewModel::setDiscountMode,
+            onHold = { showHoldDialog = true },
             onCheckout = onCheckout
         )
     }
@@ -245,6 +279,20 @@ fun PosScreen(
             onConfirm = { qty ->
                 viewModel.setQuantity(line.productId, qty)
                 editingLine = null
+            }
+        )
+    }
+
+    // Gantung transaksi: tahan keranjang aktif + beri keterangan opsional.
+    if (showHoldDialog) {
+        HoldSaleDialog(
+            itemCount = state.itemCount,
+            total = state.total,
+            onDismiss = { showHoldDialog = false },
+            onConfirm = { label ->
+                viewModel.hold(label)
+                showHoldDialog = false
+                Toast.makeText(context, "Transaksi digantung", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -376,6 +424,7 @@ private fun CheckoutSection(
     canCheckout: Boolean,
     onDiscountInputChange: (Double) -> Unit,
     onDiscountModeChange: (DiscountMode) -> Unit,
+    onHold: () -> Unit,
     onCheckout: () -> Unit
 ) {
     Surface(
@@ -428,13 +477,35 @@ private fun CheckoutSection(
                     color = if (canCheckout) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            PrimaryButton(
-                text = "BAYAR",
-                icon = Icons.Outlined.AccountBalanceWallet,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = canCheckout,
-                onClick = onCheckout
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onHold,
+                    enabled = canCheckout,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.5.dp,
+                        if (canCheckout) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Outlined.Pause, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Gantung", style = MaterialTheme.typography.labelLarge)
+                }
+                PrimaryButton(
+                    text = "BAYAR",
+                    icon = Icons.Outlined.AccountBalanceWallet,
+                    modifier = Modifier.weight(1.6f),
+                    enabled = canCheckout,
+                    onClick = onCheckout
+                )
+            }
         }
     }
 }
@@ -570,6 +641,75 @@ private fun DiscountModeCell(label: String, selected: Boolean, onClick: () -> Un
 
 private fun formatDiscountInput(value: Double): String =
     if (value > 0) value.toLong().toString() else ""
+
+/** Dialog menggantung transaksi: tahan keranjang + keterangan opsional. */
+@Composable
+private fun HoldSaleDialog(
+    itemCount: Int,
+    total: Double,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var label by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                "Gantung Transaksi",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "$itemCount item · ${Formatters.rupiah(total)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Keranjang ditahan agar Anda bisa melayani pelanggan lain dulu. " +
+                        "Beri nama/keterangan agar mudah dikenali saat dilanjutkan (opsional).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it.take(40) },
+                    label = { Text("Nama pelanggan / catatan") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(label) }) {
+                Text(
+                    "Gantung",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    "Batal",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
+}
 
 /** Strip status: tampil saat offline atau ada transaksi menunggu kirim. */
 @Composable

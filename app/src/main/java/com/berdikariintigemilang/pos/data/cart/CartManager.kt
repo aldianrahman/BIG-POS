@@ -176,6 +176,16 @@ class CartManager @Inject constructor(
         _discountInput.value = value.coerceAtLeast(0.0)
     }
 
+    /**
+     * Muat ulang isi keranjang dari sebuah snapshot (mis. saat melanjutkan
+     * transaksi gantung). Menimpa isi keranjang aktif saat ini.
+     */
+    fun load(lines: List<CartLine>, discountMode: DiscountMode, discountInput: Double) {
+        _lines.value = lines
+        _discountMode.value = discountMode
+        _discountInput.value = discountInput.coerceAtLeast(0.0)
+    }
+
     fun clear() {
         _lines.value = emptyList()
         _discountInput.value = 0.0
