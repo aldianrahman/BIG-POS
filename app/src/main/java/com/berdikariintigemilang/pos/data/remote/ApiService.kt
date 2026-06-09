@@ -133,4 +133,8 @@ interface ApiService {
     // ===== Settings =====
     @GET("api/pos/settings/receipt")
     suspend fun receiptSetting(): PosApiResponse<ReceiptSettingDto>
+
+    // ===== Versi aplikasi (gating saat login) =====
+    @GET("api/v1/app-versions/{id}")
+    suspend fun appVersion(@Path("id") id: Long): PosApiResponse<AppVersionDto>
 }
