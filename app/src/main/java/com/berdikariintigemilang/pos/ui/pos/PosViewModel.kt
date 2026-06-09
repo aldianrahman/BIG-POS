@@ -152,6 +152,9 @@ class PosViewModel @Inject constructor(
                 if (online) {
                     if (!catalogCache.isCatalogReady()) catalogCache.refreshAll()
                     catalogCache.refreshStock()
+                    // Promo bundle & pengaturan struk yang baru dari web ikut disegarkan
+                    // agar diskon bundle langsung berlaku di keranjang.
+                    catalogCache.refreshBundles()
                     SyncScheduler.syncNow(appContext)
                 }
             }
