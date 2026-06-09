@@ -34,6 +34,8 @@ data class ReceiptData(
     val total: Double,
     val cashReceived: Double,
     val change: Double,
+    val paymentMethod: String = "CASH",
+    val paymentReference: String? = null,
     val pendingSync: Boolean = true
 )
 
@@ -80,8 +82,14 @@ class OfflineReceiptComposer @Inject constructor() {
         }
         sb.appendLine(sep())
         sb.appendLine(leftRight("TOTAL", money(data.total)))
-        sb.appendLine(leftRight("Tunai", money(data.cashReceived)))
-        sb.appendLine(leftRight("Kembali", money(data.change)))
+        if (data.paymentMethod == "CASH") {
+            sb.appendLine(leftRight("Tunai", money(data.cashReceived)))
+            sb.appendLine(leftRight("Kembali", money(data.change)))
+        } else {
+            val label = if (data.paymentMethod == "QRIS") "QRIS" else "Kartu"
+            sb.appendLine(leftRight(label, money(data.total)))
+            data.paymentReference?.let { sb.appendLine(truncate("Ref  : $it")) }
+        }
         sb.appendLine(sep())
         setting?.footer?.replace("|", "\n")?.split("\n")
             ?.map { it.trim() }

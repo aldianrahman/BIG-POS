@@ -85,7 +85,9 @@ class OfflineTransactionStore @Inject constructor(
         discount: Double,
         cashReceived: Double,
         notes: String?,
-        cashierName: String?
+        cashierName: String?,
+        paymentMethod: String = "CASH",
+        paymentReference: String? = null
     ): PendingTransactionEntity {
         val now = System.currentTimeMillis()
         val result = pricing.price(lines, discount)
@@ -109,6 +111,8 @@ class OfflineTransactionStore @Inject constructor(
                 total = result.total,
                 cashReceived = cashReceived,
                 change = change,
+                paymentMethod = paymentMethod,
+                paymentReference = paymentReference,
                 pendingSync = false
             ),
             setting
@@ -127,6 +131,8 @@ class OfflineTransactionStore @Inject constructor(
             offlineTrxNo = offlineNo,
             receiptContent = receipt,
             cashierName = cashierName,
+            paymentMethod = paymentMethod,
+            paymentReference = paymentReference,
             createdAt = now,
             status = SyncStatus.PENDING.name
         )
@@ -150,6 +156,8 @@ class OfflineTransactionStore @Inject constructor(
             discountAmount = e.discountAmount,
             cashReceived = e.cashReceived,
             notes = e.notes,
+            paymentMethod = e.paymentMethod,
+            paymentReference = e.paymentReference,
             clientCreatedAt = isoLocal(e.createdAt),
             allowNegativeStock = true
         )

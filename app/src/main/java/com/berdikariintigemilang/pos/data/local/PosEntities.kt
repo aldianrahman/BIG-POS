@@ -1,5 +1,6 @@
 package com.berdikariintigemilang.pos.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -30,6 +31,14 @@ data class PendingTransactionEntity(
     val discountAmount: Double,
     val cashReceived: Double,
     val notes: String?,
+    /**
+     * Metode pembayaran: CASH (default), QRIS, atau CARD. defaultValue agar
+     * cocok dengan migrasi (kolom ditambah NOT NULL DEFAULT 'CASH').
+     */
+    @ColumnInfo(defaultValue = "CASH")
+    val paymentMethod: String = "CASH",
+    /** Nomor referensi pembayaran non-tunai (QRIS/EDC). */
+    val paymentReference: String? = null,
     // Snapshot perhitungan saat penjualan (untuk struk & tampilan, dihitung lokal).
     val subtotal: Double,
     val bundleDiscount: Double,

@@ -15,6 +15,10 @@ data class TransactionRequest(
     val discountAmount: Double = 0.0,
     val cashReceived: Double,
     val notes: String? = null,
+    /** Metode pembayaran: CASH (default), QRIS, atau CARD. */
+    val paymentMethod: String = "CASH",
+    /** Nomor referensi pembayaran non-tunai (QRIS/EDC). */
+    val paymentReference: String? = null,
     /** Waktu jual asli (ISO lokal) untuk transaksi offline — agar laporan akurat. */
     val clientCreatedAt: String? = null,
     /** True utk penjualan offline yang sudah terjadi: server terima walau stok minus. */
@@ -87,6 +91,8 @@ data class TransactionDto(
     val totalAmount: Double = 0.0,
     val cashReceived: Double = 0.0,
     val changeAmount: Double = 0.0,
+    val paymentMethod: String = "CASH",
+    val paymentReference: String? = null,
     val status: String = "COMPLETED",
     val notes: String? = null,
     val createdAt: String? = null,
