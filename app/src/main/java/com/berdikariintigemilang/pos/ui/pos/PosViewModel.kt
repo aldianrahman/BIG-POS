@@ -3,6 +3,7 @@ package com.berdikariintigemilang.pos.ui.pos
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.berdikariintigemilang.pos.core.datastore.SessionStore
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.data.cart.CartLine
@@ -32,6 +33,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -75,6 +77,7 @@ class PosViewModel @Inject constructor(
     private val heldStore: HeldSaleStore,
     private val holdTicketPrinter: HoldTicketPrinter,
     private val resumeHeldSale: ResumeHeldSale,
+    private val sessionStore: SessionStore,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -136,7 +139,11 @@ class PosViewModel @Inject constructor(
     private var lastScanCode: String? = null
     private var lastScanAt = 0L
 
+    // Nama kasir aktif (dipakai pada struk transaksi gantung).
+    private var cashierName: String? = null
+
     init {
+        viewModelScope.launch { cashierName = sessionStore.userFlow.first()?.fullName }
         // Tiap kali ada koneksi (termasuk saat sinyal kembali): segarkan katalog bila
         // belum ada, refresh stok lokal (agar restock/penyesuaian dari server masuk),
         // lalu kirim antrian transaksi.
@@ -179,7 +186,8 @@ class PosViewModel @Inject constructor(
             label = label,
             lines = lines,
             discountMode = cartManager.discountMode.value,
-            discountInput = cartManager.discountInput.value
+            discountInput = cartManager.discountInput.value,
+            cashierName = cashierName
         )
         cartManager.clear()
         // Cetak struk gantung (daftar item + QR) best-effort; beri tahu hasilnya.

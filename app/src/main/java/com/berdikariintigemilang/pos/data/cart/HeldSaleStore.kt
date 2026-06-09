@@ -39,7 +39,9 @@ data class HeldSale(
     val lines: List<CartLine>,
     val discountMode: DiscountMode,
     val discountInput: Double,
-    val createdAt: Long
+    val createdAt: Long,
+    /** Nama kasir yang menggantung transaksi (untuk struk gantung). */
+    val cashierName: String? = null
 ) {
     val itemCount: Int get() = lines.sumOf { it.quantity }
     val subtotal: Double get() = lines.sumOf { it.lineSubtotal }
@@ -100,7 +102,8 @@ class HeldSaleStore @Inject constructor(
         label: String,
         lines: List<CartLine>,
         discountMode: DiscountMode,
-        discountInput: Double
+        discountInput: Double,
+        cashierName: String? = null
     ): HeldSale {
         val sale = HeldSale(
             id = UUID.randomUUID().toString(),
@@ -108,7 +111,8 @@ class HeldSaleStore @Inject constructor(
             lines = lines,
             discountMode = discountMode,
             discountInput = discountInput,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            cashierName = cashierName
         )
         _sales.update { listOf(sale) + it }
         return sale
