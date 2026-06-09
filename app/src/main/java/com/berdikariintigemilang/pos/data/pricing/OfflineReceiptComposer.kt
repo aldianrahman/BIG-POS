@@ -91,6 +91,43 @@ class OfflineReceiptComposer @Inject constructor() {
         return sb.toString()
     }
 
+    /**
+     * Susun teks struk transaksi gantung (belum dibayar): header toko, daftar
+     * item, subtotal, dan instruksi. QR (berisi id) ditambahkan terpisah oleh
+     * printer sebagai gambar.
+     */
+    fun composeHoldTicket(
+        label: String,
+        dateMillis: Long,
+        lines: List<ReceiptLine>,
+        subtotal: Double,
+        itemCount: Int,
+        setting: CachedReceiptSettingEntity?
+    ): String {
+        val sb = StringBuilder()
+        val storeName = setting?.storeName?.takeIf { it.isNotBlank() } ?: "STRUK"
+        sb.appendLine(center(storeName))
+        setting?.address?.takeIf { it.isNotBlank() }?.let { sb.appendLine(center(it)) }
+        setting?.phone?.takeIf { it.isNotBlank() }?.let { sb.appendLine(center(it)) }
+        sb.appendLine(sep())
+        sb.appendLine(center("** TRANSAKSI GANTUNG **"))
+        if (label.isNotBlank()) sb.appendLine(truncate("Nama : $label"))
+        sb.appendLine("Tgl  : ${formatDate(dateMillis)}")
+        sb.appendLine(sep())
+        for (item in lines) {
+            sb.appendLine(truncate(item.name))
+            sb.appendLine(leftRight("  ${item.quantity} x ${money(item.unitPrice)}", money(item.subtotal)))
+        }
+        sb.appendLine(sep())
+        sb.appendLine(leftRight("Subtotal", money(subtotal)))
+        sb.appendLine(leftRight("Total item", itemCount.toString()))
+        sb.appendLine(sep())
+        sb.appendLine(center("Belum dibayar"))
+        sb.appendLine(center("Scan QR di kasir untuk"))
+        sb.appendLine(center("melanjutkan pesanan"))
+        return sb.toString()
+    }
+
     private fun formatDate(millis: Long): String =
         LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault()).format(dateFmt)
 

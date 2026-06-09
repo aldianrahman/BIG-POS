@@ -9,6 +9,8 @@ import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.cart.DiscountMode
 import com.berdikariintigemilang.pos.data.cart.HeldSaleStore
+import com.berdikariintigemilang.pos.data.cart.HoldQr
+import com.berdikariintigemilang.pos.data.cart.ResumeHeldSale
 import com.berdikariintigemilang.pos.data.pricing.LocalPricingCalculator
 import com.berdikariintigemilang.pos.data.remote.AppliedBundleDto
 import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
@@ -21,6 +23,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.berdikariintigemilang.pos.data.repository.CatalogCacheRepository
+import com.berdikariintigemilang.pos.data.repository.HoldPrintResult
+import com.berdikariintigemilang.pos.data.repository.HoldTicketPrinter
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.sync.SyncScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -69,6 +73,8 @@ class PosViewModel @Inject constructor(
     private val connectivity: ConnectivityObserver,
     private val offlineStore: OfflineTransactionStore,
     private val heldStore: HeldSaleStore,
+    private val holdTicketPrinter: HoldTicketPrinter,
+    private val resumeHeldSale: ResumeHeldSale,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -169,13 +175,21 @@ class PosViewModel @Inject constructor(
     fun hold(label: String) {
         val lines = cartManager.lines.value
         if (lines.isEmpty()) return
-        heldStore.add(
+        val sale = heldStore.add(
             label = label,
             lines = lines,
             discountMode = cartManager.discountMode.value,
             discountInput = cartManager.discountInput.value
         )
         cartManager.clear()
+        // Cetak struk gantung (daftar item + QR) best-effort; beri tahu hasilnya.
+        viewModelScope.launch {
+            when (val r = holdTicketPrinter.print(sale)) {
+                HoldPrintResult.Printed -> _scanMessages.send("Struk gantung tercetak")
+                HoldPrintResult.NoPrinter -> Unit // diam: bisa dilanjutkan via daftar gantung
+                is HoldPrintResult.Failed -> _scanMessages.send("Gagal cetak struk gantung: ${r.message}")
+            }
+        }
     }
 
     /**
@@ -190,6 +204,20 @@ class PosViewModel @Inject constructor(
         if (code == lastScanCode && now - lastScanAt < 700) return
         lastScanCode = code
         lastScanAt = now
+        // QR struk gantung? Lanjutkan transaksinya (jangan dicari sebagai produk).
+        val holdId = HoldQr.parse(code)
+        if (holdId != null) {
+            val sale = resumeHeldSale(holdId)
+            viewModelScope.launch {
+                if (sale != null) {
+                    _scanned.send(Unit)
+                    _scanMessages.send("Lanjut transaksi gantung: ${sale.label.ifBlank { "Tanpa nama" }}")
+                } else {
+                    _scanMessages.send("Struk gantung tidak ditemukan / sudah dipakai")
+                }
+            }
+            return
+        }
         viewModelScope.launch {
             when (val res = productRepository.byBarcode(code)) {
                 is ApiResult.Success -> {
