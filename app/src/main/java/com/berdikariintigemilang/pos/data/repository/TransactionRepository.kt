@@ -4,6 +4,7 @@ import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.network.safePosCall
 import com.berdikariintigemilang.pos.data.remote.ApiService
 import com.berdikariintigemilang.pos.data.remote.ReceiptDto
+import com.berdikariintigemilang.pos.data.remote.RefundRequest
 import com.berdikariintigemilang.pos.data.remote.TransactionDto
 import com.berdikariintigemilang.pos.data.remote.TransactionRequest
 import com.berdikariintigemilang.pos.data.remote.TrxPageDto
@@ -23,6 +24,12 @@ class TransactionRepository @Inject constructor(
 
     suspend fun void(id: Long, reason: String): ApiResult<TransactionDto> =
         safePosCall { api.voidTransaction(id, VoidRequest(reason)) }
+
+    suspend fun getById(id: Long): ApiResult<TransactionDto> =
+        safePosCall { api.transaction(id) }
+
+    suspend fun refund(id: Long, request: RefundRequest): ApiResult<TransactionDto> =
+        safePosCall { api.refundTransaction(id, request) }
 
     suspend fun receipt(id: Long): ApiResult<ReceiptDto> =
         safePosCall { api.receipt(id) }

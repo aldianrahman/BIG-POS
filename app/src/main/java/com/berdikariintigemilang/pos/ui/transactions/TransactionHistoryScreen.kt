@@ -8,19 +8,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -34,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,10 +49,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.util.Formatters
+import com.berdikariintigemilang.pos.data.remote.RefundItemRequest
+import com.berdikariintigemilang.pos.data.remote.TransactionDto
 import com.berdikariintigemilang.pos.ui.components.AppCard
 import com.berdikariintigemilang.pos.ui.components.EmptyState
 import com.berdikariintigemilang.pos.ui.components.FullScreenLoading
@@ -58,6 +69,7 @@ fun TransactionHistoryScreen(
     viewModel: TransactionHistoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val refundTarget by viewModel.refundTarget.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     var voidTarget by remember { mutableStateOf<TrxRow?>(null) }
@@ -115,12 +127,17 @@ fun TransactionHistoryScreen(
                         item { OfflineNotice() }
                     }
                     items(state.items, key = { it.ref }) { trx ->
+                        // Aksi admin untuk transaksi tersinkron yang belum final:
+                        // Kartu -> Void; QRIS/Tunai -> Refund.
+                        val canAct = state.isAdmin && !state.offline && trx.serverId != null &&
+                            trx.statusKind == TrxStatusKind.DONE
                         TransactionRow(
                             trx = trx,
-                            showVoid = state.isAdmin && !state.offline && trx.serverId != null &&
-                                trx.statusKind == TrxStatusKind.DONE,
+                            showVoid = canAct && trx.paymentMethod == "CARD",
+                            showRefund = canAct && trx.paymentMethod != "CARD",
                             onReprint = { onOpenReceipt(trx.ref) },
-                            onVoid = { voidTarget = trx }
+                            onVoid = { voidTarget = trx },
+                            onRefund = { trx.serverId?.let { viewModel.startRefund(it) } }
                         )
                     }
                     if (state.loadingMore) {
@@ -146,6 +163,14 @@ fun TransactionHistoryScreen(
                 trx.serverId?.let { viewModel.void(it, reason) }
                 voidTarget = null
             }
+        )
+    }
+
+    refundTarget?.let { trx ->
+        RefundDialog(
+            transaction = trx,
+            onDismiss = { viewModel.cancelRefund() },
+            onConfirm = { full, reason, items -> viewModel.refund(trx.id, full, reason, items) }
         )
     }
 }
@@ -182,8 +207,10 @@ private fun OfflineNotice() {
 private fun TransactionRow(
     trx: TrxRow,
     showVoid: Boolean,
+    showRefund: Boolean,
     onReprint: () -> Unit,
-    onVoid: () -> Unit
+    onVoid: () -> Unit,
+    onRefund: () -> Unit
 ) {
     AppCard(onClick = onReprint) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -229,6 +256,11 @@ private fun TransactionRow(
                     TextButton(onClick = onReprint) {
                         Text("Cetak Ulang", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     }
+                    if (showRefund) {
+                        TextButton(onClick = onRefund) {
+                            Text("Refund", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                        }
+                    }
                     if (showVoid) {
                         TextButton(onClick = onVoid) {
                             Text("Void", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
@@ -244,7 +276,7 @@ private fun TransactionRow(
 private fun statusColors(kind: TrxStatusKind): Pair<Color, Color> = when (kind) {
     TrxStatusKind.DONE, TrxStatusKind.SYNCED ->
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-    TrxStatusKind.PENDING ->
+    TrxStatusKind.PENDING, TrxStatusKind.REFUND ->
         MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
     TrxStatusKind.CONFLICT, TrxStatusKind.VOID ->
         MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.error
@@ -270,5 +302,91 @@ private fun VoidDialog(trxNo: String, onDismiss: () -> Unit, onConfirm: (String)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } }
+    )
+}
+
+@Composable
+private fun RefundDialog(
+    transaction: TransactionDto,
+    onDismiss: () -> Unit,
+    onConfirm: (full: Boolean, reason: String, items: List<RefundItemRequest>) -> Unit
+) {
+    val hasBundle = transaction.bundleDiscount > 0.0
+    var reason by remember { mutableStateOf("") }
+    val qty = remember {
+        mutableStateMapOf<Long, Int>().apply { transaction.items.forEach { put(it.productId, 0) } }
+    }
+    val anySelected = qty.values.any { it > 0 }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Refund ${transaction.trxNo}", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    if (hasBundle) "Transaksi memakai bundle — hanya bisa Refund Penuh."
+                    else "Atur jumlah unit yang di-refund, atau pilih Refund Penuh.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (hasBundle) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                transaction.items.forEach { item ->
+                    val remaining = item.quantity - item.refundedQuantity
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                item.productName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "sisa $remaining dari ${item.quantity}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        OutlinedTextField(
+                            value = (qty[item.productId] ?: 0).toString(),
+                            onValueChange = { v ->
+                                val n = v.filter { it.isDigit() }.toIntOrNull() ?: 0
+                                qty[item.productId] = n.coerceIn(0, remaining)
+                            },
+                            enabled = !hasBundle && remaining > 0,
+                            singleLine = true,
+                            modifier = Modifier.width(76.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text("Alasan refund") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!hasBundle) {
+                    TextButton(
+                        onClick = { onConfirm(false, reason.trim(), qty.filter { it.value > 0 }.map { RefundItemRequest(it.key, it.value) }) },
+                        enabled = reason.isNotBlank() && anySelected
+                    ) { Text("Sebagian", color = MaterialTheme.colorScheme.secondary) }
+                }
+                TextButton(
+                    onClick = { onConfirm(true, reason.trim(), emptyList()) },
+                    enabled = reason.isNotBlank()
+                ) { Text("Refund Penuh", color = MaterialTheme.colorScheme.primary) }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
     )
 }
