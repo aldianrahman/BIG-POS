@@ -5,6 +5,8 @@ import com.berdikariintigemilang.pos.data.local.CatalogDao
 import com.berdikariintigemilang.pos.data.local.LocalStockDao
 import com.berdikariintigemilang.pos.data.local.PendingTransactionDao
 import com.berdikariintigemilang.pos.data.local.PendingTransactionEntity
+import com.berdikariintigemilang.pos.data.local.PriceEditLogDao
+import com.berdikariintigemilang.pos.data.local.PriceEditLogEntity
 import com.berdikariintigemilang.pos.data.local.SyncStatus
 import com.berdikariintigemilang.pos.data.pricing.LocalPricingCalculator
 import com.berdikariintigemilang.pos.data.pricing.OfflineReceiptComposer
@@ -53,6 +55,7 @@ class OfflineTransactionStore @Inject constructor(
     private val pendingDao: PendingTransactionDao,
     private val localStockDao: LocalStockDao,
     private val catalogDao: CatalogDao,
+    private val priceEditLogDao: PriceEditLogDao,
     private val pricing: LocalPricingCalculator,
     private val receiptComposer: OfflineReceiptComposer,
     moshi: Moshi
@@ -85,14 +88,21 @@ class OfflineTransactionStore @Inject constructor(
         discount: Double,
         cashReceived: Double,
         notes: String?,
-        cashierName: String?
+        cashierName: String?,
+        cashierUserId: Long? = null
     ): PendingTransactionEntity {
         val now = System.currentTimeMillis()
         val result = pricing.price(lines, discount)
         val change = (cashReceived - result.total).coerceAtLeast(0.0)
         val offlineNo = "OFFLINE/" +
             LocalDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault()).format(noFmt)
-        val items = lines.map { TransactionItemRequest(it.productId, it.quantity) }
+        // Harga sales yang lebih murah dikirim ke server sebagai diskon per item:
+        // server menghitung lineSubtotal = hargaMaster*qty - discountAmount, sehingga
+        // total yang dihitung ulang server sama persis dengan struk yang dicetak.
+        val items = lines.map {
+            val lineDiscount = ((it.masterPrice - it.unitPrice) * it.quantity).coerceAtLeast(0.0)
+            TransactionItemRequest(it.productId, it.quantity, lineDiscount)
+        }
         val setting = catalogDao.receiptSetting()
         val receipt = receiptComposer.compose(
             ReceiptData(
@@ -131,6 +141,26 @@ class OfflineTransactionStore @Inject constructor(
             status = SyncStatus.PENDING.name
         )
         pendingDao.insert(entity)
+        // Catat log untuk tiap baris yang harganya diturunkan sales (harga sales vs master).
+        val editedLogs = lines.filter { it.isPriceEdited }.map { line ->
+            PriceEditLogEntity(
+                id = UUID.randomUUID().toString(),
+                productId = line.productId,
+                productName = line.name,
+                sku = line.sku,
+                masterPrice = line.masterPrice,
+                newPrice = line.unitPrice,
+                quantity = line.quantity,
+                editedByUserId = line.priceEditedByUserId ?: 0L,
+                editedByName = line.priceEditedByName ?: "",
+                cashierUserId = cashierUserId,
+                cashierName = cashierName,
+                clientTxnId = entity.clientTxnId,
+                offlineTrxNo = entity.offlineTrxNo,
+                createdAt = now
+            )
+        }
+        if (editedLogs.isNotEmpty()) priceEditLogDao.insertAll(editedLogs)
         // Kurangi stok lokal (gabung qty per produk).
         val merged = HashMap<Long, Int>()
         lines.forEach { merged.merge(it.productId, it.quantity, Int::plus) }
@@ -231,6 +261,8 @@ class OfflineTransactionStore @Inject constructor(
                 lastError = warning
             )
         )
+        // Sematkan nomor struk server ke log perubahan harga terkait (bila ada).
+        priceEditLogDao.setServerTrxNo(clientTxnId, serverTrxNo)
     }
 
     /** Gagal sementara (jaringan/server) — tetap di antrian untuk dicoba lagi. */

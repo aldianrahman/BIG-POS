@@ -6,6 +6,13 @@ object Constants {
 
     /** Role yang dianggap admin (boleh CRUD master data, void). */
     val ADMIN_ROLES = setOf("ROLE_DEVELOPER", "ROLE_KASIR_ADMIN")
+
+    /**
+     * ID karyawan (user big-tracker) yang berwenang mengubah harga jual di
+     * halaman kasir. Hanya kredensial milik salah satu id ini yang boleh
+     * menurunkan harga satuan saat transaksi. Ubah daftar di sini bila perlu.
+     */
+    val PRICE_EDIT_AUTHORIZED_IDS = setOf(38L, 54L, 60L)
 }
 
 fun List<String>.isAllowedToLogin(): Boolean = any { it in Constants.ALLOWED_ROLES }

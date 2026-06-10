@@ -103,6 +103,40 @@ data class CachedBundleItemEntity(
     val quantity: Int
 )
 
+/**
+ * Catatan setiap kali harga jual produk diturunkan oleh sales di halaman kasir
+ * (harga sales vs harga master). Ditulis saat transaksi disimpan, satu baris per
+ * produk yang harganya diubah, sehingga bisa ditelusuri: sales mana mengubah
+ * harga produk apa, di transaksi mana, dari berapa ke berapa.
+ */
+@Entity(tableName = "price_edit_logs")
+data class PriceEditLogEntity(
+    /** UUID lokal (dibuat saat mencatat log). */
+    @PrimaryKey val id: String,
+    val productId: Long,
+    val productName: String,
+    val sku: String,
+    /** Harga master saat transaksi (acuan). */
+    val masterPrice: Double,
+    /** Harga jual sales hasil edit (≤ masterPrice). */
+    val newPrice: Double,
+    val quantity: Int,
+    /** Id karyawan yang mengubah harga (38/54/60). */
+    val editedByUserId: Long,
+    /** Username/nama karyawan yang mengubah harga. */
+    val editedByName: String,
+    /** Kasir yang sedang login saat transaksi. */
+    val cashierUserId: Long?,
+    val cashierName: String?,
+    /** Kunci transaksi lokal (idempotency key) yang memuat perubahan ini. */
+    val clientTxnId: String,
+    /** Nomor struk sementara offline (mis. "OFFLINE/..."). */
+    val offlineTrxNo: String,
+    /** Nomor struk server final, diisi setelah transaksi tersinkron. */
+    val serverTrxNo: String? = null,
+    val createdAt: Long
+)
+
 /** Pengaturan struk (header + PPN) untuk format struk & hitung pajak offline. Satu baris (id=0). */
 @Entity(tableName = "cached_receipt_setting")
 data class CachedReceiptSettingEntity(

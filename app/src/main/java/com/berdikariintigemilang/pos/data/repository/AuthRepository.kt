@@ -6,6 +6,7 @@ import com.berdikariintigemilang.pos.core.datastore.SessionStore
 import com.berdikariintigemilang.pos.core.datastore.SessionUser
 import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.network.safePosCall
+import com.berdikariintigemilang.pos.core.util.Constants
 import com.berdikariintigemilang.pos.core.util.isAllowedToLogin
 import com.berdikariintigemilang.pos.core.util.isPosAdmin
 import com.berdikariintigemilang.pos.data.cart.CartManager
@@ -16,6 +17,9 @@ import retrofit2.HttpException
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Karyawan berwenang hasil verifikasi kredensial untuk ubah harga di kasir. */
+data class PriceEditor(val id: Long, val username: String)
 
 @Singleton
 class AuthRepository @Inject constructor(
@@ -81,6 +85,34 @@ class AuthRepository @Inject constructor(
                 ApiResult.Success(user)
             }
         }
+    }
+
+    /**
+     * Verifikasi kredensial karyawan yang berwenang menurunkan harga di kasir,
+     * TANPA mengubah sesi kasir yang sedang login (token & user tidak ditimpa).
+     *
+     * Berhasil hanya bila: kredensial benar DAN id karyawan termasuk daftar
+     * [Constants.PRICE_EDIT_AUTHORIZED_IDS] (mis. 38/54/60). Verifikasi password
+     * dilakukan di server sehingga membutuhkan koneksi internet.
+     */
+    suspend fun verifyPriceEditor(username: String, password: String): ApiResult<PriceEditor> {
+        val res = try {
+            api.signin(LoginRequest(username.trim(), password))
+        } catch (e: HttpException) {
+            return ApiResult.Error(
+                if (e.code() == 401 || e.code() == 400) "Username atau password salah"
+                else "Verifikasi gagal (${e.code()})",
+                httpStatus = e.code()
+            )
+        } catch (e: IOException) {
+            return ApiResult.Error("Perlu koneksi internet untuk verifikasi ubah harga")
+        } catch (e: Exception) {
+            return ApiResult.Error(e.message ?: "Verifikasi gagal")
+        }
+        if (res.id !in Constants.PRICE_EDIT_AUTHORIZED_IDS) {
+            return ApiResult.Error("Akun ini tidak berwenang mengubah harga")
+        }
+        return ApiResult.Success(PriceEditor(id = res.id, username = res.username.ifBlank { username.trim() }))
     }
 
     /** Validasi token masih berlaku (dipakai Splash). */

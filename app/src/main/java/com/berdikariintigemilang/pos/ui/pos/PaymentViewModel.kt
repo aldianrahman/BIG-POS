@@ -57,9 +57,14 @@ class PaymentViewModel @Inject constructor(
     val success = _success.receiveAsFlow()
 
     private var cashierName: String? = null
+    private var cashierUserId: Long? = null
 
     init {
-        viewModelScope.launch { cashierName = sessionStore.userFlow.first()?.fullName }
+        viewModelScope.launch {
+            val user = sessionStore.userFlow.first()
+            cashierName = user?.fullName
+            cashierUserId = user?.id
+        }
         // Hitung potongan bundle + PPN secara lokal agar total benar tanpa sinyal.
         viewModelScope.launch {
             val lines = cartManager.lines.value
@@ -130,7 +135,8 @@ class PaymentViewModel @Inject constructor(
                     discount = cartManager.discount.value,
                     cashReceived = cash,
                     notes = null,
-                    cashierName = cashierName
+                    cashierName = cashierName,
+                    cashierUserId = cashierUserId
                 )
                 cartManager.clear()
                 // Coba kirim segera bila ada koneksi; bila tidak, WorkManager menunggu.

@@ -12,6 +12,8 @@ import com.berdikariintigemilang.pos.data.remote.AppliedBundleDto
 import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
 import com.berdikariintigemilang.pos.data.remote.taxFor
 import com.berdikariintigemilang.pos.data.remote.totalFor
+import com.berdikariintigemilang.pos.core.network.ApiResult
+import com.berdikariintigemilang.pos.data.repository.AuthRepository
 import com.berdikariintigemilang.pos.data.repository.BundleRepository
 import com.berdikariintigemilang.pos.data.repository.ProductRepository
 import com.berdikariintigemilang.pos.data.repository.SettingsRepository
@@ -21,7 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import com.berdikariintigemilang.pos.data.repository.CatalogCacheRepository
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.sync.SyncScheduler
-import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,6 +52,17 @@ data class PosCartState(
 }
 
 /**
+ * State dialog "Ubah Harga" satu baris keranjang. [line] non-null berarti dialog
+ * terbuka untuk baris tersebut; [submitting] saat verifikasi kredensial berjalan;
+ * [error] pesan bila verifikasi gagal / tidak berwenang / harga tidak valid.
+ */
+data class PriceEditState(
+    val line: CartLine? = null,
+    val submitting: Boolean = false,
+    val error: String? = null
+)
+
+/**
  * Keranjang POS dengan perhitungan total (bundle + PPN) sepenuhnya lokal,
  * sehingga harga tetap benar tanpa sinyal. Saat ada koneksi, katalog di-cache
  * (untuk persiapan offline) dan antrian transaksi dikirim.
@@ -61,7 +73,8 @@ class PosViewModel @Inject constructor(
     private val cartManager: CartManager,
     private val bundleRepository: BundleRepository,
     private val settingsRepository: SettingsRepository,
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
+    private val authRepository: AuthRepository,
     private val pricing: LocalPricingCalculator,
     private val catalogCache: CatalogCacheRepository,
     private val connectivity: ConnectivityObserver,
@@ -117,6 +130,12 @@ class PosViewModel @Inject constructor(
     private val _scanMessages = Channel<String>(Channel.BUFFERED)
     val scanMessages = _scanMessages.receiveAsFlow()
 
+    // Dialog ubah harga per baris keranjang (verifikasi sales 38/54/60).
+    private val _priceEditState = MutableStateFlow(PriceEditState())
+    val priceEditState: StateFlow<PriceEditState> = _priceEditState
+    private val _priceEditMessages = Channel<String>(Channel.BUFFERED)
+    val priceEditMessages = _priceEditMessages.receiveAsFlow()
+
     // Anti dobel-baca dari satu kali scan (DataWedge kadang mengirim ganda).
     private var lastScanCode: String? = null
     private var lastScanAt = 0L
@@ -151,6 +170,49 @@ class PosViewModel @Inject constructor(
     fun setDiscountInput(value: Double) = cartManager.setDiscountInput(value)
     fun setDiscountMode(mode: DiscountMode) = cartManager.setDiscountMode(mode)
     fun clear() = cartManager.clear()
+
+    // ── Ubah harga per baris (butuh verifikasi sales berwenang) ───────────────
+    fun startPriceEdit(line: CartLine) { _priceEditState.value = PriceEditState(line = line) }
+    fun dismissPriceEdit() { _priceEditState.value = PriceEditState() }
+
+    /**
+     * Verifikasi kredensial sales lalu terapkan harga baru ke baris keranjang.
+     * Hanya id berwenang (Constants.PRICE_EDIT_AUTHORIZED_IDS) yang diterima, dan
+     * harga baru tidak boleh melebihi harga master. Total otomatis ikut diperbarui
+     * karena keranjang berubah. Setiap perubahan dicatat ke log saat pembayaran.
+     */
+    fun confirmPriceEdit(username: String, password: String, newPrice: Double) {
+        val line = _priceEditState.value.line ?: return
+        val invalid = when {
+            username.isBlank() || password.isBlank() -> "Username & password wajib diisi"
+            newPrice <= 0.0 -> "Harga harus lebih dari 0"
+            newPrice > line.masterPrice -> "Harga tidak boleh lebih besar dari harga master"
+            else -> null
+        }
+        if (invalid != null) {
+            _priceEditState.value = _priceEditState.value.copy(error = invalid)
+            return
+        }
+        _priceEditState.value = _priceEditState.value.copy(submitting = true, error = null)
+        viewModelScope.launch {
+            when (val res = authRepository.verifyPriceEditor(username, password)) {
+                is ApiResult.Success -> {
+                    val ok = cartManager.overrideLinePrice(line.productId, newPrice, res.data.id, res.data.username)
+                    if (ok) {
+                        _priceEditState.value = PriceEditState()
+                        _priceEditMessages.send("Harga ${line.name} diperbarui")
+                    } else {
+                        _priceEditState.value = _priceEditState.value.copy(
+                            submitting = false,
+                            error = "Gagal menerapkan harga"
+                        )
+                    }
+                }
+                is ApiResult.Error -> _priceEditState.value =
+                    _priceEditState.value.copy(submitting = false, error = res.message)
+            }
+        }
+    }
 
     /**
      * Scan dari scanner hardware Zebra (DataWedge) di halaman kasir: cari produk

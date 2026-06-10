@@ -21,6 +21,7 @@ import com.berdikariintigemilang.pos.ui.pos.ScanScreen
 import com.berdikariintigemilang.pos.ui.shift.ShiftCloseScreen
 import com.berdikariintigemilang.pos.ui.shift.ShiftOpenScreen
 import com.berdikariintigemilang.pos.ui.shift.ZReportScreen
+import com.berdikariintigemilang.pos.ui.pricelog.PriceEditLogScreen
 import com.berdikariintigemilang.pos.ui.splash.SplashDestination
 import com.berdikariintigemilang.pos.ui.splash.SplashScreen
 import com.berdikariintigemilang.pos.ui.transactions.TransactionHistoryScreen
@@ -84,7 +85,8 @@ fun PosNavGraph(
                 onCheckout = { navController.navigate(Routes.PAYMENT) },
                 onProductClick = { productId -> navController.navigate(Routes.productDetail(productId)) },
                 onTransactions = { navController.navigate(Routes.TRANSACTIONS) },
-                onAddProduct = { navController.navigate(Routes.productEdit(0)) }
+                onAddProduct = { navController.navigate(Routes.productEdit(0)) },
+                onPriceLog = { navController.navigate(Routes.PRICE_LOG) }
             )
         }
 
@@ -93,6 +95,10 @@ fun PosNavGraph(
                 onBack = { navController.popBackStack() },
                 onOpenReceipt = { trxId -> navController.navigate(Routes.receipt(trxId)) }
             )
+        }
+
+        composable(Routes.PRICE_LOG) {
+            PriceEditLogScreen(onBack = { navController.popBackStack() })
         }
 
         composable(

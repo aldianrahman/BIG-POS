@@ -34,11 +34,23 @@ data class CartLine(
     val productId: Long,
     val sku: String,
     val name: String,
+    /** Harga efektif yang ditagih (harga master, atau harga sales bila diubah). */
     val unitPrice: Double,
     val quantity: Int,
-    val stock: Int
+    val stock: Int,
+    /**
+     * Harga master (harga jual asli dari master produk). Jadi acuan batas atas
+     * saat mengubah harga & dicatat di log. Tidak ikut berubah saat harga diedit.
+     */
+    val masterPrice: Double = unitPrice,
+    /** Id karyawan (mis. 38/54/60) yang menurunkan harga baris ini; null bila masih harga master. */
+    val priceEditedByUserId: Long? = null,
+    /** Username/nama karyawan yang mengubah harga (untuk log & tampilan). */
+    val priceEditedByName: String? = null
 ) {
     val lineSubtotal: Double get() = unitPrice * quantity
+    /** True bila harga baris ini sudah diturunkan dari harga master oleh sales. */
+    val isPriceEdited: Boolean get() = priceEditedByUserId != null && unitPrice < masterPrice
 }
 
 /** Cara input diskon: nominal Rupiah atau persentase dari subtotal. */
@@ -142,7 +154,8 @@ class CartManager @Inject constructor(
                     name = product.name,
                     unitPrice = product.sellingPrice,
                     quantity = quantity,
-                    stock = stock
+                    stock = stock,
+                    masterPrice = product.sellingPrice
                 )
             } else {
                 val newQty = existing.quantity + quantity
@@ -160,6 +173,33 @@ class CartManager @Inject constructor(
                 if (it.productId == productId) it.copy(quantity = quantity.coerceAtMost(it.stock)) else it
             }
         }
+    }
+
+    /**
+     * Ubah harga satuan satu baris keranjang menjadi [newPrice] (harga jual sales)
+     * untuk transaksi ini saja — TIDAK mengubah harga master produk. Perubahan
+     * dicatat atas nama [byUserId]/[byName]. Harga baru dibatasi 0..masterPrice;
+     * mengembalikan false bila [newPrice] melebihi harga master (tidak diterapkan).
+     */
+    fun overrideLinePrice(productId: Long, newPrice: Double, byUserId: Long, byName: String): Boolean {
+        var applied = false
+        _lines.update { current ->
+            current.map { line ->
+                when {
+                    line.productId != productId -> line
+                    newPrice > line.masterPrice -> line // tolak: tidak boleh lebih besar dari harga master
+                    else -> {
+                        applied = true
+                        line.copy(
+                            unitPrice = newPrice.coerceIn(0.0, line.masterPrice),
+                            priceEditedByUserId = byUserId,
+                            priceEditedByName = byName
+                        )
+                    }
+                }
+            }
+        }
+        return applied
     }
 
     fun remove(productId: Long) {

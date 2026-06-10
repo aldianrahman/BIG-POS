@@ -38,4 +38,9 @@ object Formatters {
             iso
         }
     }
+
+    /** Format epoch millis (jam HP) ke tampilan dd/MM/yyyy HH:mm. */
+    fun displayDateTime(millis: Long): String =
+        LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(millis), java.time.ZoneId.systemDefault())
+            .format(displayDateFmt)
 }

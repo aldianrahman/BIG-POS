@@ -72,7 +72,8 @@ fun MainScreen(
     onCheckout: () -> Unit = {},
     onProductClick: (Long) -> Unit = {},
     onTransactions: () -> Unit = {},
-    onAddProduct: () -> Unit = {}
+    onAddProduct: () -> Unit = {},
+    onPriceLog: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.POS) }
 
@@ -103,6 +104,7 @@ fun MainScreen(
                 onCloseShift = onCloseShift,
                 onLoggedOut = onLoggedOut,
                 onTransactions = onTransactions,
+                onPriceLog = onPriceLog,
                 modifier = contentModifier
             )
         }

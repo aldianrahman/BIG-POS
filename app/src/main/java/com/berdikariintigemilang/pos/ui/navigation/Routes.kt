@@ -15,6 +15,7 @@ object Routes {
     const val PRODUCT_DETAIL = "product_detail/{productId}"
     const val PRODUCT_EDIT = "product_edit/{productId}"
     const val TRANSACTIONS = "transactions"
+    const val PRICE_LOG = "price_log"
 
     fun shiftClose(shiftId: Long) = "shift_close/$shiftId"
     fun zReport(shiftId: Long) = "z_report/$shiftId"

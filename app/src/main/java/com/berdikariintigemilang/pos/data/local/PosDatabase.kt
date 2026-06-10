@@ -10,13 +10,15 @@ import androidx.room.RoomDatabase
         LocalStockEntity::class,
         CachedBundleEntity::class,
         CachedBundleItemEntity::class,
-        CachedReceiptSettingEntity::class
+        CachedReceiptSettingEntity::class,
+        PriceEditLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PosDatabase : RoomDatabase() {
     abstract fun pendingTransactionDao(): PendingTransactionDao
     abstract fun localStockDao(): LocalStockDao
     abstract fun catalogDao(): CatalogDao
+    abstract fun priceEditLogDao(): PriceEditLogDao
 }
