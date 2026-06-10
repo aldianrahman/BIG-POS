@@ -6,7 +6,9 @@ import com.squareup.moshi.JsonClass
 data class TransactionItemRequest(
     val productId: Long,
     val quantity: Int,
-    val discountAmount: Double = 0.0
+    val discountAmount: Double = 0.0,
+    /** Id sales yang menurunkan harga item ini di kasir; null bila harga master. */
+    val priceEditedBy: Long? = null
 )
 
 @JsonClass(generateAdapter = true)

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PointOfSale
@@ -70,6 +71,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -105,6 +107,7 @@ fun PosScreen(
     val state by viewModel.state.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
+    val priceEditState by viewModel.priceEditState.collectAsState()
     val heldCount by viewModel.heldCount.collectAsState()
     var editingLine by remember { mutableStateOf<CartLine?>(null) }
     var showHoldDialog by remember { mutableStateOf(false) }
@@ -118,6 +121,9 @@ fun PosScreen(
     LaunchedEffect(Unit) { viewModel.scanned.collect { scanFeedback(context) } }
     LaunchedEffect(Unit) {
         viewModel.scanMessages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.priceEditMessages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
 
     Column(modifier = modifier.fillMaxSize().imePadding()) {
@@ -266,7 +272,8 @@ fun PosScreen(
                             onIncrement = { viewModel.increment(line) },
                             onDecrement = { viewModel.decrement(line) },
                             onRemove = { viewModel.remove(line.productId) },
-                            onEditQuantity = { editingLine = line }
+                            onEditQuantity = { editingLine = line },
+                            onEditPrice = { viewModel.startPriceEdit(line) }
                         )
                     }
                 }
@@ -310,6 +317,15 @@ fun PosScreen(
         )
     }
 
+    // Ubah harga satuan (butuh verifikasi sales berwenang: id 38/54/60).
+    priceEditState.line?.let { line ->
+        PriceEditDialog(
+            line = line,
+            submitting = priceEditState.submitting,
+            error = priceEditState.error,
+            onDismiss = viewModel::dismissPriceEdit,
+            onConfirm = { username, password, newPrice ->
+                viewModel.confirmPriceEdit(username, password, newPrice)
     // Gantung transaksi: tahan keranjang aktif + beri keterangan opsional.
     if (showHoldDialog) {
         HoldSaleDialog(
@@ -332,7 +348,8 @@ private fun CartItemRow(
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onRemove: () -> Unit,
-    onEditQuantity: () -> Unit
+    onEditQuantity: () -> Unit,
+    onEditPrice: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -353,11 +370,65 @@ private fun CartItemRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "${Formatters.rupiah(line.unitPrice)} · stok ${line.stock}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (line.isPriceEdited) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            Formatters.rupiah(line.masterPrice),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textDecoration = TextDecoration.LineThrough
+                        )
+                        Text(
+                            Formatters.rupiah(line.unitPrice),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            "· stok ${line.stock}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Text(
+                        "${Formatters.rupiah(line.unitPrice)} · stok ${line.stock}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onEditPrice)
+                        .padding(vertical = 2.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = "Ubah harga",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        if (line.isPriceEdited) "Harga diubah" else "Ubah harga",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (line.isPriceEdited && !line.priceEditedByName.isNullOrBlank()) {
+                    Text(
+                        "oleh @${line.priceEditedByName}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     Formatters.rupiah(line.lineSubtotal),

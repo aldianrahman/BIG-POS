@@ -94,7 +94,19 @@ class OfflineTransactionStore @Inject constructor(
         val change = (cashReceived - result.total).coerceAtLeast(0.0)
         val offlineNo = "OFFLINE/" +
             LocalDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault()).format(noFmt)
-        val items = lines.map { TransactionItemRequest(it.productId, it.quantity) }
+        // Harga sales yang lebih murah dikirim ke server sebagai diskon per item:
+        // server menghitung lineSubtotal = hargaMaster*qty - discountAmount, sehingga
+        // total yang dihitung ulang server sama persis dengan struk yang dicetak.
+        // priceEditedBy = id sales yang menurunkan harga (untuk log harga di web admin).
+        val items = lines.map {
+            val lineDiscount = ((it.masterPrice - it.unitPrice) * it.quantity).coerceAtLeast(0.0)
+            TransactionItemRequest(
+                productId = it.productId,
+                quantity = it.quantity,
+                discountAmount = lineDiscount,
+                priceEditedBy = if (it.isPriceEdited) it.priceEditedByUserId else null
+            )
+        }
         val setting = catalogDao.receiptSetting()
         val receipt = receiptComposer.compose(
             ReceiptData(
