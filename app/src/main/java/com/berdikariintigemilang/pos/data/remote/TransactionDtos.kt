@@ -15,6 +15,10 @@ data class TransactionRequest(
     val discountAmount: Double = 0.0,
     val cashReceived: Double,
     val notes: String? = null,
+    /** Metode pembayaran: CASH (default), QRIS, atau CARD. */
+    val paymentMethod: String = "CASH",
+    /** Nomor referensi pembayaran non-tunai (QRIS/EDC). */
+    val paymentReference: String? = null,
     /** Waktu jual asli (ISO lokal) untuk transaksi offline — agar laporan akurat. */
     val clientCreatedAt: String? = null,
     /** True utk penjualan offline yang sudah terjadi: server terima walau stok minus. */
@@ -53,6 +57,16 @@ data class BatchResponse(
 @JsonClass(generateAdapter = true)
 data class VoidRequest(val reason: String)
 
+@JsonClass(generateAdapter = true)
+data class RefundItemRequest(val productId: Long, val quantity: Int)
+
+@JsonClass(generateAdapter = true)
+data class RefundRequest(
+    val full: Boolean = false,
+    val reason: String,
+    val items: List<RefundItemRequest> = emptyList()
+)
+
 /** Bentuk Spring Page (field "number" untuk halaman). */
 @JsonClass(generateAdapter = true)
 data class TrxPageDto<T>(
@@ -71,7 +85,8 @@ data class TransactionItemDto(
     val quantity: Int = 0,
     val unitPrice: Double = 0.0,
     val discountAmount: Double = 0.0,
-    val subtotal: Double = 0.0
+    val subtotal: Double = 0.0,
+    val refundedQuantity: Int = 0
 )
 
 @JsonClass(generateAdapter = true)
@@ -83,10 +98,14 @@ data class TransactionDto(
     val cashierName: String? = null,
     val subtotal: Double = 0.0,
     val discountAmount: Double = 0.0,
+    val bundleDiscount: Double = 0.0,
     val taxAmount: Double = 0.0,
     val totalAmount: Double = 0.0,
     val cashReceived: Double = 0.0,
     val changeAmount: Double = 0.0,
+    val refundedAmount: Double = 0.0,
+    val paymentMethod: String = "CASH",
+    val paymentReference: String? = null,
     val status: String = "COMPLETED",
     val notes: String? = null,
     val createdAt: String? = null,

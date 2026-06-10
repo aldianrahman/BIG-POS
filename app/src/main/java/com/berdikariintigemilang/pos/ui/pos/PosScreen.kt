@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CropFree
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
@@ -33,7 +35,12 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PointOfSale
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -41,8 +48,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,11 +65,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.scanner.DataWedgeScanner
@@ -70,6 +82,16 @@ import com.berdikariintigemilang.pos.data.cart.DiscountMode
 import com.berdikariintigemilang.pos.ui.components.EmptyState
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
 
+/**
+ * Ambang tinggi layar (dp). Di bawah nilai ini, layar Kasir memakai tata letak
+ * ringkas: chrome (bilah atas & area bayar) dirapatkan dan rincian harga dilipat,
+ * agar daftar item punya ruang scroll lebih banyak di perangkat layar pendek
+ * seperti Zebra. Layar HP biasa (lebih tinggi) tidak berubah. Sesuaikan bila
+ * perlu: naikkan bila device Zebra belum ikut ringkas; turunkan bila HP normal
+ * malah ikut meringkas.
+ */
+private const val COMPACT_SCREEN_HEIGHT_DP = 660
+
 @Composable
 fun PosScreen(
     modifier: Modifier = Modifier,
@@ -77,13 +99,18 @@ fun PosScreen(
     onSearchClick: () -> Unit = {},
     onCheckout: () -> Unit = {},
     onHistory: () -> Unit = {},
+    onOpenHeld: () -> Unit = {},
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
+    val heldCount by viewModel.heldCount.collectAsState()
     var editingLine by remember { mutableStateOf<CartLine?>(null) }
+    var showHoldDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    // Layar pendek (mis. perangkat Zebra): rapatkan elemen tetap & lipat rincian.
+    val compact = LocalConfiguration.current.screenHeightDp < COMPACT_SCREEN_HEIGHT_DP
 
     // Scanner hardware Zebra (DataWedge): aktif selama halaman kasir tampil.
     // Scan barcode → produk langsung ditambahkan (qty 1) bila ada di database.
@@ -100,7 +127,12 @@ fun PosScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
+                .padding(
+                    start = 12.dp,
+                    end = 12.dp,
+                    top = if (compact) 6.dp else 8.dp,
+                    bottom = if (compact) 6.dp else 12.dp
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -111,7 +143,7 @@ fun PosScreen(
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = if (compact) 10.dp else 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -121,7 +153,7 @@ fun PosScreen(
             }
             FilledIconButton(
                 onClick = onScanClick,
-                modifier = Modifier.size(54.dp),
+                modifier = Modifier.size(if (compact) 46.dp else 54.dp),
                 shape = MaterialTheme.shapes.medium,
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -130,9 +162,31 @@ fun PosScreen(
             ) {
                 Icon(Icons.Filled.CropFree, contentDescription = "Scan barcode")
             }
+            BadgedBox(
+                badge = {
+                    if (heldCount > 0) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) { Text("$heldCount") }
+                    }
+                }
+            ) {
+                FilledIconButton(
+                    onClick = onOpenHeld,
+                    modifier = Modifier.size(if (compact) 46.dp else 54.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Icon(Icons.Outlined.Schedule, contentDescription = "Transaksi gantung")
+                }
+            }
             FilledIconButton(
                 onClick = onHistory,
-                modifier = Modifier.size(54.dp),
+                modifier = Modifier.size(if (compact) 46.dp else 54.dp),
                 shape = MaterialTheme.shapes.medium,
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -176,7 +230,7 @@ fun PosScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -198,12 +252,17 @@ fun PosScreen(
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(
+                        start = 12.dp,
+                        end = 12.dp,
+                        bottom = if (compact) 8.dp else 12.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
                 ) {
                     items(state.lines, key = { it.productId }) { line ->
                         CartItemRow(
                             line = line,
+                            compact = compact,
                             onIncrement = { viewModel.increment(line) },
                             onDecrement = { viewModel.decrement(line) },
                             onRemove = { viewModel.remove(line.productId) },
@@ -226,8 +285,10 @@ fun PosScreen(
             taxInclusive = state.taxInclusive,
             total = state.total,
             canCheckout = state.canCheckout,
+            compact = compact,
             onDiscountInputChange = viewModel::setDiscountInput,
             onDiscountModeChange = viewModel::setDiscountMode,
+            onHold = { showHoldDialog = true },
             onCheckout = onCheckout
         )
     }
@@ -248,11 +309,26 @@ fun PosScreen(
             }
         )
     }
+
+    // Gantung transaksi: tahan keranjang aktif + beri keterangan opsional.
+    if (showHoldDialog) {
+        HoldSaleDialog(
+            itemCount = state.itemCount,
+            total = state.total,
+            onDismiss = { showHoldDialog = false },
+            onConfirm = { label ->
+                viewModel.hold(label)
+                showHoldDialog = false
+                Toast.makeText(context, "Transaksi digantung", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
 }
 
 @Composable
 private fun CartItemRow(
     line: CartLine,
+    compact: Boolean,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onRemove: () -> Unit,
@@ -265,7 +341,7 @@ private fun CartItemRow(
         shadowElevation = 2.dp
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(if (compact) 10.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
@@ -273,7 +349,7 @@ private fun CartItemRow(
                     line.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    maxLines = if (compact) 1 else 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(2.dp))
@@ -299,7 +375,7 @@ private fun CartItemRow(
             Spacer(Modifier.width(8.dp))
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(if (compact) 38.dp else 42.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.errorContainer)
                     .clickable(onClick = onRemove),
@@ -309,7 +385,7 @@ private fun CartItemRow(
                     Icons.Outlined.Delete,
                     contentDescription = "Hapus",
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(if (compact) 20.dp else 22.dp)
                 )
             }
         }
@@ -374,67 +450,204 @@ private fun CheckoutSection(
     taxInclusive: Boolean,
     total: Double,
     canCheckout: Boolean,
+    compact: Boolean,
     onDiscountInputChange: (Double) -> Unit,
     onDiscountModeChange: (DiscountMode) -> Unit,
+    onHold: () -> Unit,
     onCheckout: () -> Unit
 ) {
+    // Di layar pendek, rincian (subtotal/diskon/PPN) dilipat agar hemat ruang;
+    // di layar normal selalu tampil seperti biasa.
+    var showDetails by remember { mutableStateOf(false) }
+    val spacing = if (compact) 8.dp else 12.dp
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 10.dp
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(
+                horizontal = if (compact) 16.dp else 20.dp,
+                vertical = if (compact) 10.dp else 16.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Subtotal", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(Formatters.rupiah(subtotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            if (bundleDiscount > 0) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Potongan Bundle", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
-                        bundleLabels.forEach {
-                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Text("-${Formatters.rupiah(bundleDiscount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
+            if (compact) {
+                DetailsToggle(
+                    expanded = showDetails,
+                    savings = discount + bundleDiscount,
+                    onToggle = { showDetails = !showDetails }
+                )
+                if (showDetails) {
+                    CheckoutDetails(
+                        subtotal = subtotal,
+                        discount = discount,
+                        discountMode = discountMode,
+                        discountInput = discountInput,
+                        bundleDiscount = bundleDiscount,
+                        bundleLabels = bundleLabels,
+                        taxAmount = taxAmount,
+                        taxInclusive = taxInclusive,
+                        spacing = spacing,
+                        onDiscountInputChange = onDiscountInputChange,
+                        onDiscountModeChange = onDiscountModeChange
+                    )
                 }
-            }
-            DiscountField(
-                mode = discountMode,
-                input = discountInput,
-                discount = discount,
-                onInputChange = onDiscountInputChange,
-                onModeChange = onDiscountModeChange
-            )
-            if (taxAmount > 0) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (taxInclusive) "PPN (termasuk)" else "PPN", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(Formatters.rupiah(taxAmount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            } else {
+                CheckoutDetails(
+                    subtotal = subtotal,
+                    discount = discount,
+                    discountMode = discountMode,
+                    discountInput = discountInput,
+                    bundleDiscount = bundleDiscount,
+                    bundleLabels = bundleLabels,
+                    taxAmount = taxAmount,
+                    taxInclusive = taxInclusive,
+                    spacing = spacing,
+                    onDiscountInputChange = onDiscountInputChange,
+                    onDiscountModeChange = onDiscountModeChange
+                )
             }
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Total", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "Total",
+                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(
                     Formatters.rupiah(total),
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (canCheckout) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            PrimaryButton(
-                text = "BAYAR",
-                icon = Icons.Outlined.AccountBalanceWallet,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = canCheckout,
-                onClick = onCheckout
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onHold,
+                    enabled = canCheckout,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(horizontal = if (compact) 8.dp else 16.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.5.dp,
+                        if (canCheckout) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Outlined.Pause, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(if (compact) 4.dp else 8.dp))
+                    Text("Gantung", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                }
+                PrimaryButton(
+                    text = "BAYAR",
+                    icon = Icons.Outlined.AccountBalanceWallet,
+                    modifier = Modifier.weight(1.6f),
+                    enabled = canCheckout,
+                    onClick = onCheckout
+                )
+            }
+        }
+    }
+}
+
+/** Tombol lipat untuk menampilkan/menyembunyikan rincian harga di layar pendek. */
+@Composable
+private fun DetailsToggle(
+    expanded: Boolean,
+    savings: Double,
+    onToggle: () -> Unit
+) {
+    Surface(
+        onClick = onToggle,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    if (expanded) "Sembunyikan rincian" else "Lihat rincian",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!expanded && savings > 0) {
+                Text(
+                    "Hemat ${Formatters.rupiah(savings)}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+        }
+    }
+}
+
+/** Baris rincian harga (subtotal, bundle, diskon, PPN) untuk ringkasan bayar. */
+@Composable
+private fun CheckoutDetails(
+    subtotal: Double,
+    discount: Double,
+    discountMode: DiscountMode,
+    discountInput: Double,
+    bundleDiscount: Double,
+    bundleLabels: List<String>,
+    taxAmount: Double,
+    taxInclusive: Boolean,
+    spacing: Dp,
+    onDiscountInputChange: (Double) -> Unit,
+    onDiscountModeChange: (DiscountMode) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Subtotal", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(Formatters.rupiah(subtotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        if (bundleDiscount > 0) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f)) {
+                    Text("Potongan Bundle", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
+                    bundleLabels.forEach {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text("-${Formatters.rupiah(bundleDiscount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
+            }
+        }
+        DiscountField(
+            mode = discountMode,
+            input = discountInput,
+            discount = discount,
+            onInputChange = onDiscountInputChange,
+            onModeChange = onDiscountModeChange
+        )
+        if (taxAmount > 0) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(if (taxInclusive) "PPN (termasuk)" else "PPN", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(Formatters.rupiah(taxAmount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -570,6 +783,75 @@ private fun DiscountModeCell(label: String, selected: Boolean, onClick: () -> Un
 
 private fun formatDiscountInput(value: Double): String =
     if (value > 0) value.toLong().toString() else ""
+
+/** Dialog menggantung transaksi: tahan keranjang + keterangan opsional. */
+@Composable
+private fun HoldSaleDialog(
+    itemCount: Int,
+    total: Double,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var label by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                "Gantung Transaksi",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "$itemCount item · ${Formatters.rupiah(total)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Keranjang ditahan agar Anda bisa melayani pelanggan lain dulu. " +
+                        "Beri nama/keterangan agar mudah dikenali saat dilanjutkan (opsional).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it.take(40) },
+                    label = { Text("Nama pelanggan / catatan") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(label) }) {
+                Text(
+                    "Gantung",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    "Batal",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
+}
 
 /** Strip status: tampil saat offline atau ada transaksi menunggu kirim. */
 @Composable

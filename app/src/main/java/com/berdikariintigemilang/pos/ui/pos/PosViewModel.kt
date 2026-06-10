@@ -3,10 +3,15 @@ package com.berdikariintigemilang.pos.ui.pos
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.berdikariintigemilang.pos.core.datastore.SessionStore
+import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.data.cart.CartLine
 import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.cart.DiscountMode
+import com.berdikariintigemilang.pos.data.cart.HeldSaleStore
+import com.berdikariintigemilang.pos.data.cart.HoldQr
+import com.berdikariintigemilang.pos.data.cart.ResumeHeldSale
 import com.berdikariintigemilang.pos.data.pricing.LocalPricingCalculator
 import com.berdikariintigemilang.pos.data.remote.AppliedBundleDto
 import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
@@ -19,15 +24,18 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.berdikariintigemilang.pos.data.repository.CatalogCacheRepository
+import com.berdikariintigemilang.pos.data.repository.HoldPrintResult
+import com.berdikariintigemilang.pos.data.repository.HoldTicketPrinter
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
 import com.berdikariintigemilang.pos.data.sync.SyncScheduler
-import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -61,11 +69,15 @@ class PosViewModel @Inject constructor(
     private val cartManager: CartManager,
     private val bundleRepository: BundleRepository,
     private val settingsRepository: SettingsRepository,
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
     private val pricing: LocalPricingCalculator,
     private val catalogCache: CatalogCacheRepository,
     private val connectivity: ConnectivityObserver,
     private val offlineStore: OfflineTransactionStore,
+    private val heldStore: HeldSaleStore,
+    private val holdTicketPrinter: HoldTicketPrinter,
+    private val resumeHeldSale: ResumeHeldSale,
+    private val sessionStore: SessionStore,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -106,6 +118,12 @@ class PosViewModel @Inject constructor(
         offlineStore.observeUnsyncedCount()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /** Jumlah transaksi gantung (untuk badge antrian "struk gantung"). */
+    val heldCount: StateFlow<Int> =
+        heldStore.sales
+            .map { it.size }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     /** Status koneksi internet. */
     val isOnline: StateFlow<Boolean> =
         connectivity.isOnline
@@ -121,7 +139,11 @@ class PosViewModel @Inject constructor(
     private var lastScanCode: String? = null
     private var lastScanAt = 0L
 
+    // Nama kasir aktif (dipakai pada struk transaksi gantung).
+    private var cashierName: String? = null
+
     init {
+        viewModelScope.launch { cashierName = sessionStore.userFlow.first()?.fullName }
         // Tiap kali ada koneksi (termasuk saat sinyal kembali): segarkan katalog bila
         // belum ada, refresh stok lokal (agar restock/penyesuaian dari server masuk),
         // lalu kirim antrian transaksi.
@@ -130,6 +152,9 @@ class PosViewModel @Inject constructor(
                 if (online) {
                     if (!catalogCache.isCatalogReady()) catalogCache.refreshAll()
                     catalogCache.refreshStock()
+                    // Promo bundle & pengaturan struk yang baru dari web ikut disegarkan
+                    // agar diskon bundle langsung berlaku di keranjang.
+                    catalogCache.refreshBundles()
                     SyncScheduler.syncNow(appContext)
                 }
             }
@@ -153,6 +178,32 @@ class PosViewModel @Inject constructor(
     fun clear() = cartManager.clear()
 
     /**
+     * Gantung keranjang aktif (hold/park sale), lalu kosongkan keranjang agar
+     * kasir bisa langsung melayani pelanggan berikutnya. Tidak melakukan apa pun
+     * bila keranjang kosong. [label] opsional (mis. nama pelanggan / antrian).
+     */
+    fun hold(label: String) {
+        val lines = cartManager.lines.value
+        if (lines.isEmpty()) return
+        val sale = heldStore.add(
+            label = label,
+            lines = lines,
+            discountMode = cartManager.discountMode.value,
+            discountInput = cartManager.discountInput.value,
+            cashierName = cashierName
+        )
+        cartManager.clear()
+        // Cetak struk gantung (daftar item + QR) best-effort; beri tahu hasilnya.
+        viewModelScope.launch {
+            when (val r = holdTicketPrinter.print(sale)) {
+                HoldPrintResult.Printed -> _scanMessages.send("Struk gantung tercetak")
+                HoldPrintResult.NoPrinter -> Unit // diam: bisa dilanjutkan via daftar gantung
+                is HoldPrintResult.Failed -> _scanMessages.send("Gagal cetak struk gantung: ${r.message}")
+            }
+        }
+    }
+
+    /**
      * Scan dari scanner hardware Zebra (DataWedge) di halaman kasir: cari produk
      * berdasarkan barcode, lalu langsung tambah qty 1 ke keranjang (akumulatif
      * bila sudah ada). Umpan balik via [scanned] (beep/getar) & [scanMessages].
@@ -164,6 +215,20 @@ class PosViewModel @Inject constructor(
         if (code == lastScanCode && now - lastScanAt < 700) return
         lastScanCode = code
         lastScanAt = now
+        // QR struk gantung? Lanjutkan transaksinya (jangan dicari sebagai produk).
+        val holdId = HoldQr.parse(code)
+        if (holdId != null) {
+            val sale = resumeHeldSale(holdId)
+            viewModelScope.launch {
+                if (sale != null) {
+                    _scanned.send(Unit)
+                    _scanMessages.send("Lanjut transaksi gantung: ${sale.label.ifBlank { "Tanpa nama" }}")
+                } else {
+                    _scanMessages.send("Struk gantung tidak ditemukan / sudah dipakai")
+                }
+            }
+            return
+        }
         viewModelScope.launch {
             when (val res = productRepository.byBarcode(code)) {
                 is ApiResult.Success -> {

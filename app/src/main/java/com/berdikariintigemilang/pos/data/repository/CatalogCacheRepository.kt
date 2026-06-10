@@ -59,6 +59,24 @@ class CatalogCacheRepository @Inject constructor(
     }
 
     /**
+     * Refresh ringan bundle + pengaturan struk — dipakai tiap kali online agar
+     * promo/PPN yang baru dibuat/diedit di web langsung berlaku di kasir tanpa
+     * perlu "Perbarui katalog" manual. Bila panggilan gagal, cache lama tetap
+     * dipertahankan (clear baru dilakukan setelah respons sukses).
+     */
+    suspend fun refreshBundles(): ApiResult<Unit> = try {
+        cacheBundles()
+        cacheReceiptSetting()
+        ApiResult.Success(Unit)
+    } catch (e: HttpException) {
+        ApiResult.Error(mapHttp(e.code()), httpStatus = e.code())
+    } catch (e: IOException) {
+        ApiResult.Error("Koneksi bermasalah. Periksa jaringan Anda.")
+    } catch (e: Exception) {
+        ApiResult.Error(e.message ?: "Gagal memuat bundle")
+    }
+
+    /**
      * Segarkan cache untuk produk yang baru diambil dari server (saat browsing
      * online), termasuk stoknya — supaya bila tiba-tiba offline, data terbaru
      * (mis. hasil restock di web) sudah tersimpan lokal.

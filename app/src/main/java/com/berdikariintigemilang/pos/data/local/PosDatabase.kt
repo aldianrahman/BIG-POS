@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         CachedBundleItemEntity::class,
         CachedReceiptSettingEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PosDatabase : RoomDatabase() {

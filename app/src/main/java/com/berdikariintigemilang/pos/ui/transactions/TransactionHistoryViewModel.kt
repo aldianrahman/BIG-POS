@@ -7,6 +7,8 @@ import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.core.util.Formatters
 import com.berdikariintigemilang.pos.data.local.PendingTransactionEntity
 import com.berdikariintigemilang.pos.data.local.SyncStatus
+import com.berdikariintigemilang.pos.data.remote.RefundItemRequest
+import com.berdikariintigemilang.pos.data.remote.RefundRequest
 import com.berdikariintigemilang.pos.data.remote.TransactionDto
 import com.berdikariintigemilang.pos.data.repository.AuthRepository
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
@@ -27,7 +29,7 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /** Jenis status untuk pewarnaan chip. */
-enum class TrxStatusKind { SYNCED, PENDING, CONFLICT, DONE, VOID }
+enum class TrxStatusKind { SYNCED, PENDING, CONFLICT, DONE, VOID, REFUND }
 
 /** Baris riwayat terpadu: bisa dari transaksi lokal HP atau dari server. */
 data class TrxRow(
@@ -38,8 +40,9 @@ data class TrxRow(
     val totalAmount: Double,
     val statusLabel: String,
     val statusKind: TrxStatusKind,
-    val serverId: Long?,      // untuk void & ambil struk resmi server
-    val voided: Boolean
+    val serverId: Long?,      // untuk void/refund & ambil struk resmi server
+    val voided: Boolean,
+    val paymentMethod: String = "CASH"
 )
 
 data class TransactionHistoryUiState(
@@ -138,6 +141,34 @@ class TransactionHistoryViewModel @Inject constructor(
         }
     }
 
+    /** Transaksi yang sedang disiapkan untuk refund (memuat item & sisa qty). */
+    private val _refundTarget = MutableStateFlow<TransactionDto?>(null)
+    val refundTarget: StateFlow<TransactionDto?> = _refundTarget
+
+    fun startRefund(serverId: Long) {
+        viewModelScope.launch {
+            when (val res = transactionRepository.getById(serverId)) {
+                is ApiResult.Success -> _refundTarget.value = res.data
+                is ApiResult.Error -> _messages.send(res.message)
+            }
+        }
+    }
+
+    fun cancelRefund() { _refundTarget.value = null }
+
+    fun refund(serverId: Long, full: Boolean, reason: String, items: List<RefundItemRequest>) {
+        viewModelScope.launch {
+            when (val res = transactionRepository.refund(serverId, RefundRequest(full = full, reason = reason, items = items))) {
+                is ApiResult.Success -> {
+                    _refundTarget.value = null
+                    _messages.send("Refund berhasil, stok dikembalikan")
+                    load(reset = true)
+                }
+                is ApiResult.Error -> _messages.send(res.message)
+            }
+        }
+    }
+
     /**
      * Online: transaksi lokal yang BELUM tersinkron (disematkan di atas) + daftar
      * server. Yang sudah tersinkron sudah ada di daftar server (tak digandakan).
@@ -173,22 +204,33 @@ class TransactionHistoryViewModel @Inject constructor(
             statusLabel = label,
             statusKind = kind,
             serverId = serverId,
-            voided = false
+            voided = false,
+            paymentMethod = paymentMethod
         )
     }
 
     private fun TransactionDto.toRow(): TrxRow {
-        val voided = status == "VOIDED"
+        val kind = when (status) {
+            "VOIDED" -> TrxStatusKind.VOID
+            "REFUNDED" -> TrxStatusKind.REFUND
+            else -> TrxStatusKind.DONE
+        }
+        val label = when (kind) {
+            TrxStatusKind.VOID -> "Void"
+            TrxStatusKind.REFUND -> "Refund"
+            else -> if (refundedAmount > 0) "Refund sebagian" else "Selesai"
+        }
         return TrxRow(
             ref = id.toString(),
             trxNo = trxNo,
             dateText = Formatters.displayDateTime(createdAt),
             cashierName = cashierName,
             totalAmount = totalAmount,
-            statusLabel = if (voided) "Void" else "Selesai",
-            statusKind = if (voided) TrxStatusKind.VOID else TrxStatusKind.DONE,
+            statusLabel = label,
+            statusKind = kind,
             serverId = id,
-            voided = voided
+            voided = kind == TrxStatusKind.VOID,
+            paymentMethod = paymentMethod
         )
     }
 }
