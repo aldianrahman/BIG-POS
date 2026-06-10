@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PointOfSale
-import androidx.compose.material.icons.filled.PriceChange
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.Person
@@ -67,7 +66,6 @@ fun SettingsScreen(
     onCloseShift: (Long) -> Unit,
     onLoggedOut: () -> Unit,
     onTransactions: () -> Unit = {},
-    onPriceLog: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -146,13 +144,6 @@ fun SettingsScreen(
                             title = "Riwayat Transaksi & Cetak Ulang",
                             subtitle = "Lihat & cetak ulang transaksi lama",
                             onClick = onTransactions
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                        SettingsRow(
-                            icon = Icons.Filled.PriceChange,
-                            title = "Log Ubah Harga",
-                            subtitle = "Harga sales vs harga master & siapa yang mengubah",
-                            onClick = onPriceLog
                         )
                     }
                 }

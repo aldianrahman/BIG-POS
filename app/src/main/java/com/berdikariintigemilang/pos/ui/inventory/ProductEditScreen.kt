@@ -130,7 +130,7 @@ fun ProductEditScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SectionTitle(title = "Informasi Dasar", icon = Icons.Filled.Info)
                     Field("SKU*", sku) { sku = it }
-                    Field("Barcode", barcode) { barcode = it }
+                    Field("Barcode (Opsional)", barcode) { barcode = it }
                     Field("Nama*", name) { name = it }
                     Field("Deskripsi", desc) { desc = it }
                     CategoryDropdown(

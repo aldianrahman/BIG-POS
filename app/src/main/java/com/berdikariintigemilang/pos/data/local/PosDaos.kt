@@ -74,21 +74,6 @@ interface LocalStockDao {
 }
 
 @Dao
-interface PriceEditLogDao {
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(logs: List<PriceEditLogEntity>)
-
-    /** Semua log perubahan harga, terbaru di atas (untuk menu Log Ubah Harga). */
-    @Query("SELECT * FROM price_edit_logs ORDER BY createdAt DESC")
-    fun observeAll(): Flow<List<PriceEditLogEntity>>
-
-    /** Isi nomor struk server setelah transaksi terkait berhasil tersinkron. */
-    @Query("UPDATE price_edit_logs SET serverTrxNo = :serverTrxNo WHERE clientTxnId = :clientTxnId")
-    suspend fun setServerTrxNo(clientTxnId: String, serverTrxNo: String)
-}
-
-@Dao
 interface CatalogDao {
 
     // ---- Produk ----
