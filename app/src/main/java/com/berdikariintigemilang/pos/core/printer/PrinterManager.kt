@@ -48,6 +48,13 @@ class PrinterManager @Inject constructor(
         connectAndPrint(address, content)
     }
 
+    /**
+     * Cetak struk transaksi gantung: teks [content] diikuti QR berisi [qrContent]
+     * yang dipindai di kasir untuk melanjutkan transaksi.
+     */
+    suspend fun printHoldTicket(address: String, content: String, qrContent: String) =
+        withContext(Dispatchers.IO) { connectAndPrintHold(address, content, qrContent) }
+
     suspend fun testPrint(address: String) = withContext(Dispatchers.IO) {
         val sample = buildString {
             appendLine("        BIG GROUP - LUBY")
@@ -81,12 +88,36 @@ class PrinterManager @Inject constructor(
         }
     }
 
-    /** Ubah teks struk polos menjadi format DantSu (rata kiri, monospace). */
-    private fun toEscPos(text: String): String {
-        val body = text.replace("\r\n", "\n").trimEnd('\n')
+    @SuppressLint("MissingPermission")
+    private fun connectAndPrintHold(address: String, content: String, qrContent: String) {
+        val a = adapter ?: throw PrinterException("Perangkat tidak mendukung Bluetooth")
+        if (!a.isEnabled) throw PrinterException("Bluetooth belum aktif")
+        val device = try {
+            a.getRemoteDevice(address)
+        } catch (e: IllegalArgumentException) {
+            throw PrinterException("Alamat printer tidak valid")
+        }
+        try {
+            val connection = BluetoothConnection(device)
+            val printer = EscPosPrinter(connection, 203, 48f, 32)
+            // QR di-render printer sebagai gambar (di tengah), di bawah daftar item.
+            val formatted = bodyToEscPos(content) +
+                "\n[C]<qrcode size='25'>$qrContent</qrcode>\n[L]\n[L]\n"
+            printer.printFormattedText(formatted)
+            printer.disconnectPrinter()
+        } catch (e: PrinterException) {
+            throw e
+        } catch (e: Exception) {
+            throw PrinterException("Gagal mencetak: ${e.message ?: "koneksi printer terputus"}")
+        }
+    }
+
+    /** Ubah teks struk polos menjadi format DantSu (rata kiri, monospace) + feed. */
+    private fun toEscPos(text: String): String = bodyToEscPos(text) + "\n[L]\n[L]\n"
+
+    /** Map tiap baris teks ke baris rata-kiri DantSu, tanpa feed tambahan. */
+    private fun bodyToEscPos(text: String): String =
+        text.replace("\r\n", "\n").trimEnd('\n')
             .split("\n")
             .joinToString("\n") { "[L]" + it }
-        // Tambah feed agar mudah disobek.
-        return "$body\n[L]\n[L]\n"
-    }
 }

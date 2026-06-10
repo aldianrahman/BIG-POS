@@ -92,7 +92,8 @@ fun ReceiptScreen(
     }
 
     val total = remember(state.content) { extractReceiptTotal(state.content) }
-    val subtitle = if (total != null) "Pembayaran tunai · ${Formatters.rupiah(total)}" else "Pembayaran tunai"
+    val payLabel = remember(state.content) { extractPaymentLabel(state.content) }
+    val subtitle = if (total != null) "$payLabel · ${Formatters.rupiah(total)}" else payLabel
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -224,6 +225,16 @@ private fun extractReceiptTotal(content: String): Long? {
     val amount = line.trim().split(Regex("\\s+")).lastOrNull() ?: return null
     val digits = amount.filter { it.isDigit() }
     return digits.toLongOrNull()
+}
+
+/** Tentukan label metode bayar dari isi struk (best-effort) untuk subjudul. */
+private fun extractPaymentLabel(content: String): String {
+    val lines = content.lineSequence().map { it.trimStart() }.toList()
+    return when {
+        lines.any { it.startsWith("QRIS") } -> "Pembayaran QRIS"
+        lines.any { it.startsWith("Kartu") } -> "Pembayaran Kartu"
+        else -> "Pembayaran tunai"
+    }
 }
 
 /** Bingkai garis putus-putus membulat ala kertas struk. */

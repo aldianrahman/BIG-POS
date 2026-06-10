@@ -17,14 +17,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,6 +59,9 @@ fun LoginScreen(
 
     LaunchedEffect(Unit) {
         viewModel.prefillFromSaved()
+    }
+    LaunchedEffect(Unit) {
+        viewModel.checkVersion()
     }
     LaunchedEffect(Unit) {
         viewModel.loginSuccess.collect { onLoggedIn() }
@@ -147,6 +153,7 @@ fun LoginScreen(
                         icon = Icons.AutoMirrored.Filled.Login,
                         modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
                         loading = state.loading,
+                        enabled = state.updateRequired == null,
                         onClick = viewModel::login
                     )
                 }
@@ -160,6 +167,57 @@ fun LoginScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+            Text(
+                text = if (state.checkingVersion) "Versi ${state.appVersion} · memeriksa pembaruan…"
+                       else "Versi ${state.appVersion}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+            )
         }
+    }
+
+    // Tahan login bila versi aplikasi usang: dialog memblokir & arahkan ke developer.
+    state.updateRequired?.let { info ->
+        AlertDialog(
+            onDismissRequest = { /* sengaja kosong: tidak bisa ditutup dengan tap di luar */ },
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surface,
+            icon = {
+                Icon(
+                    Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = {
+                Text(
+                    "Pembaruan Diperlukan",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    "Versi aplikasi Anda (${info.current}) sudah usang. " +
+                        "Versi minimal yang didukung adalah ${info.required}.\n\n" +
+                        "Silakan hubungi developer untuk mendapatkan aplikasi versi terbaru.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.checkVersion() },
+                    enabled = !state.checkingVersion
+                ) {
+                    Text(
+                        if (state.checkingVersion) "Memeriksa…" else "Coba Lagi",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        )
     }
 }

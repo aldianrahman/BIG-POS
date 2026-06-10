@@ -21,6 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.berdikariintigemilang.pos.core.util.Formatters
+import com.berdikariintigemilang.pos.core.util.PaymentMethod
 import com.berdikariintigemilang.pos.ui.components.PrimaryButton
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,7 +108,7 @@ fun PaymentScreen(
                             icon = Icons.Outlined.CheckCircle,
                             modifier = Modifier.fillMaxWidth(),
                             loading = state.submitting,
-                            enabled = state.sufficient,
+                            enabled = state.canConfirm,
                             onClick = viewModel::confirm
                         )
                     }
@@ -123,42 +125,111 @@ fun PaymentScreen(
         ) {
             SummaryCard(state)
 
-            // Nominal cepat
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                QuickChip("50rb", Modifier.weight(1f)) { viewModel.setAmount(50_000) }
-                QuickChip("100rb", Modifier.weight(1f)) { viewModel.setAmount(100_000) }
-                QuickChip("200rb", Modifier.weight(1f)) { viewModel.setAmount(200_000) }
-                QuickChip("Uang Pas", Modifier.weight(1f)) { viewModel.setExact() }
-            }
+            MethodSelector(selected = state.method, onSelect = viewModel::setMethod)
 
-            NumPad(
-                modifier = Modifier.weight(1f),
-                onDigit = viewModel::appendDigit,
-                onClear = viewModel::clearCash
-            )
+            if (state.method.isCash) {
+                // Nominal cepat
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickChip("50rb", Modifier.weight(1f)) { viewModel.setAmount(50_000) }
+                    QuickChip("100rb", Modifier.weight(1f)) { viewModel.setAmount(100_000) }
+                    QuickChip("200rb", Modifier.weight(1f)) { viewModel.setAmount(200_000) }
+                    QuickChip("Uang Pas", Modifier.weight(1f)) { viewModel.setExact() }
+                }
 
-            // Hapus = mundur satu digit
-            Surface(
-                onClick = viewModel::backspace,
-                modifier = Modifier.fillMaxWidth().height(58.dp),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.onSurface
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                NumPad(
+                    modifier = Modifier.weight(1f),
+                    onDigit = viewModel::appendDigit,
+                    onClear = viewModel::clearCash
+                )
+
+                // Hapus = mundur satu digit
+                Surface(
+                    onClick = viewModel::backspace,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("Hapus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            } else {
+                ReferenceField(
+                    method = state.method,
+                    value = state.reference,
+                    onChange = viewModel::setReference
+                )
+            }
+        }
+    }
+}
+
+/** Pemilih metode bayar: Tunai / QRIS / Kartu. */
+@Composable
+private fun MethodSelector(selected: PaymentMethod, onSelect: (PaymentMethod) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        PaymentMethod.entries.forEach { m ->
+            val isSel = m == selected
+            Surface(
+                onClick = { onSelect(m) },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                border = if (isSel) null else BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        m.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Text("Hapus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
+        }
+    }
+}
+
+/** Input nomor referensi untuk pembayaran non-tunai (QRIS/EDC). */
+@Composable
+private fun ReferenceField(method: PaymentMethod, value: String, onChange: (String) -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "Pembayaran ${method.label}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Selesaikan pembayaran di mesin EDC, lalu masukkan nomor referensi/approval dari struk EDC.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = value,
+                onValueChange = onChange,
+                label = { Text("No. Referensi ${method.label}") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
+            )
         }
     }
 }
@@ -189,23 +260,46 @@ private fun SummaryCard(state: PaymentUiState) {
                 )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Uang diterima", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    Formatters.rupiah(state.cash),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (state.cash > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Kembalian", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    Formatters.rupiah(state.change),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (state.change > 0) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (state.method.isCash) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Uang diterima", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        Formatters.rupiah(state.cash),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (state.cash > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Kembalian", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        Formatters.rupiah(state.change),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (state.change > 0) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Metode bayar", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        state.method.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (state.reference.isNotBlank()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Referensi", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            state.reference,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
     }

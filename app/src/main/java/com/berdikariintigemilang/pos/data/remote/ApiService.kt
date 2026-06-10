@@ -117,8 +117,14 @@ interface ApiService {
         @Query("size") size: Int
     ): PosApiResponse<TrxPageDto<TransactionDto>>
 
+    @GET("api/pos/transactions/{id}")
+    suspend fun transaction(@Path("id") id: Long): PosApiResponse<TransactionDto>
+
     @POST("api/pos/transactions/{id}/void")
     suspend fun voidTransaction(@Path("id") id: Long, @Body body: VoidRequest): PosApiResponse<TransactionDto>
+
+    @POST("api/pos/transactions/{id}/refund")
+    suspend fun refundTransaction(@Path("id") id: Long, @Body body: RefundRequest): PosApiResponse<TransactionDto>
 
     @GET("api/pos/transactions/{id}/receipt")
     suspend fun receipt(@Path("id") id: Long): PosApiResponse<ReceiptDto>
@@ -133,4 +139,8 @@ interface ApiService {
     // ===== Settings =====
     @GET("api/pos/settings/receipt")
     suspend fun receiptSetting(): PosApiResponse<ReceiptSettingDto>
+
+    // ===== Versi aplikasi (gating saat login) =====
+    @GET("api/v1/app-versions/{id}")
+    suspend fun appVersion(@Path("id") id: Long): PosApiResponse<AppVersionDto>
 }

@@ -14,6 +14,7 @@ import com.berdikariintigemilang.pos.ui.main.AppViewModel
 import com.berdikariintigemilang.pos.ui.inventory.ProductDetailScreen
 import com.berdikariintigemilang.pos.ui.inventory.ProductEditScreen
 import com.berdikariintigemilang.pos.ui.main.MainScreen
+import com.berdikariintigemilang.pos.ui.pos.HeldSalesScreen
 import com.berdikariintigemilang.pos.ui.pos.PaymentScreen
 import com.berdikariintigemilang.pos.ui.pos.ProductSearchScreen
 import com.berdikariintigemilang.pos.ui.pos.ReceiptScreen
@@ -84,7 +85,17 @@ fun PosNavGraph(
                 onCheckout = { navController.navigate(Routes.PAYMENT) },
                 onProductClick = { productId -> navController.navigate(Routes.productDetail(productId)) },
                 onTransactions = { navController.navigate(Routes.TRANSACTIONS) },
-                onAddProduct = { navController.navigate(Routes.productEdit(0)) }
+                onAddProduct = { navController.navigate(Routes.productEdit(0)) },
+                onOpenHeld = { navController.navigate(Routes.HELD_SALES) }
+            )
+        }
+
+        composable(Routes.HELD_SALES) {
+            HeldSalesScreen(
+                onBack = { navController.popBackStack() },
+                // Setelah dilanjutkan, keranjang aktif sudah terisi ulang —
+                // kembali ke layar kasir agar kasir bisa menambah barang / membayar.
+                onResumed = { navController.popBackStack() }
             )
         }
 

@@ -1,7 +1,9 @@
 package com.berdikariintigemilang.pos.core.util
 
 import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -28,6 +30,11 @@ object Formatters {
         nf.minimumFractionDigits = 0
         return nf.format((value ?: 0).toDouble()) + "%"
     }
+
+    /** Epoch millis (jam perangkat) -> tampilan "dd/MM/yyyy HH:mm". */
+    fun dateTime(millis: Long): String =
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+            .format(displayDateFmt)
 
     /** Parse ISO-8601 (tanpa zona) dari backend ke tampilan dd/MM/yyyy HH:mm. */
     fun displayDateTime(iso: String?): String {

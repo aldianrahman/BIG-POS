@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.berdikariintigemilang.pos.core.datastore.SessionStore
+import com.berdikariintigemilang.pos.core.util.PaymentMethod
 import com.berdikariintigemilang.pos.data.cart.CartManager
 import com.berdikariintigemilang.pos.data.pricing.LocalPricingCalculator
 import com.berdikariintigemilang.pos.data.repository.OfflineTransactionStore
@@ -27,11 +28,15 @@ data class PaymentUiState(
     val taxInclusive: Boolean = true,
     val total: Double = 0.0,
     val cash: Long = 0,
+    val method: PaymentMethod = PaymentMethod.CASH,
+    val reference: String = "",
     val submitting: Boolean = false,
     val error: String? = null
 ) {
     val change: Long get() = (cash - total).toLong().coerceAtLeast(0)
-    val sufficient: Boolean get() = cash >= total
+    /** Tombol bayar aktif? Tunai: uang cukup. Non-tunai: nomor referensi terisi. */
+    val canConfirm: Boolean get() =
+        if (method.isCash) cash >= total else reference.isNotBlank()
 }
 
 /**
@@ -109,10 +114,26 @@ class PaymentViewModel @Inject constructor(
 
     fun setExact() = _state.update { it.copy(cash = it.total.toLong(), error = null) }
 
+    /** Ganti metode bayar. Non-tunai: uang dianggap pas (= total). */
+    fun setMethod(method: PaymentMethod) = _state.update {
+        it.copy(
+            method = method,
+            error = null,
+            cash = if (method.isCash) 0 else it.total.toLong()
+        )
+    }
+
+    fun setReference(value: String) = _state.update { it.copy(reference = value, error = null) }
+
     fun confirm() {
         val lines = cartManager.lines.value
         if (lines.isEmpty()) {
             _state.update { it.copy(error = "Keranjang kosong") }
+            return
+        }
+        val s = _state.value
+        if (!s.method.isCash && s.reference.isBlank()) {
+            _state.update { it.copy(error = "Nomor referensi ${s.method.label} wajib diisi") }
             return
         }
         _state.update { it.copy(submitting = true, error = null) }
@@ -120,8 +141,10 @@ class PaymentViewModel @Inject constructor(
             try {
                 // Hitung ulang harga otoritatif (sumber yang sama dipakai saat menyimpan).
                 val priced = pricing.price(lines, cartManager.discount.value)
-                val cash = _state.value.cash.toDouble()
-                if (cash < priced.total) {
+                // Tunai: pakai uang yang diinput. Non-tunai (QRIS/kartu via EDC):
+                // dibayar pas lewat mesin EDC, jadi uang diterima = total.
+                val cash = if (s.method.isCash) _state.value.cash.toDouble() else priced.total
+                if (s.method.isCash && cash < priced.total) {
                     _state.update { it.copy(submitting = false, error = "Uang diterima kurang dari total") }
                     return@launch
                 }
@@ -130,7 +153,9 @@ class PaymentViewModel @Inject constructor(
                     discount = cartManager.discount.value,
                     cashReceived = cash,
                     notes = null,
-                    cashierName = cashierName
+                    cashierName = cashierName,
+                    paymentMethod = s.method.apiValue,
+                    paymentReference = if (s.method.isCash) null else s.reference.trim()
                 )
                 cartManager.clear()
                 // Coba kirim segera bila ada koneksi; bila tidak, WorkManager menunggu.

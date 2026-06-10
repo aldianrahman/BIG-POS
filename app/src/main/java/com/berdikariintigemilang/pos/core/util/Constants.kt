@@ -13,6 +13,10 @@ object Constants {
      * menurunkan harga satuan saat transaksi. Ubah daftar di sini bila perlu.
      */
     val PRICE_EDIT_AUTHORIZED_IDS = setOf(38L, 54L, 60L)
+     * ID record versi aplikasi BIG-POS di server, dipakai untuk gating versi
+     * saat login (GET api/v1/app-versions/{id}).
+     */
+    const val APP_VERSION_ID = 16L
 }
 
 fun List<String>.isAllowedToLogin(): Boolean = any { it in Constants.ALLOWED_ROLES }

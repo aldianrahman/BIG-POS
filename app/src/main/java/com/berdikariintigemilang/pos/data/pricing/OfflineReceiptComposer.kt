@@ -34,6 +34,8 @@ data class ReceiptData(
     val total: Double,
     val cashReceived: Double,
     val change: Double,
+    val paymentMethod: String = "CASH",
+    val paymentReference: String? = null,
     val pendingSync: Boolean = true
 )
 
@@ -80,14 +82,42 @@ class OfflineReceiptComposer @Inject constructor() {
         }
         sb.appendLine(sep())
         sb.appendLine(leftRight("TOTAL", money(data.total)))
-        sb.appendLine(leftRight("Tunai", money(data.cashReceived)))
-        sb.appendLine(leftRight("Kembali", money(data.change)))
+        if (data.paymentMethod == "CASH") {
+            sb.appendLine(leftRight("Tunai", money(data.cashReceived)))
+            sb.appendLine(leftRight("Kembali", money(data.change)))
+        } else {
+            val label = if (data.paymentMethod == "QRIS") "QRIS" else "Kartu"
+            sb.appendLine(leftRight(label, money(data.total)))
+            data.paymentReference?.let { sb.appendLine(truncate("Ref  : $it")) }
+        }
         sb.appendLine(sep())
         setting?.footer?.replace("|", "\n")?.split("\n")
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
             ?.forEach { sb.appendLine(center(it)) }
         sb.appendLine("=".repeat(width))
+        return sb.toString()
+    }
+
+    /**
+     * Susun teks struk transaksi gantung yang ringkas: tanpa header toko & tanpa
+     * daftar item — hanya kasir, tanggal, dan keterangan. QR (berisi id)
+     * ditambahkan terpisah oleh printer sebagai gambar.
+     */
+    fun composeHoldTicket(
+        label: String,
+        cashierName: String?,
+        dateMillis: Long
+    ): String {
+        val sb = StringBuilder()
+        sb.appendLine(center("TRANSAKSI GANTUNG"))
+        sb.appendLine(sep())
+        sb.appendLine(truncate("Kasir: ${cashierName ?: "-"}"))
+        sb.appendLine("Tgl  : ${formatDate(dateMillis)}")
+        if (label.isNotBlank()) sb.appendLine(truncate("Ket  : $label"))
+        sb.appendLine(sep())
+        sb.appendLine(center("Scan QR di kasir untuk"))
+        sb.appendLine(center("melanjutkan pesanan"))
         return sb.toString()
     }
 
