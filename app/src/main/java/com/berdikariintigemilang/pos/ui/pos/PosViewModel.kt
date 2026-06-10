@@ -17,7 +17,6 @@ import com.berdikariintigemilang.pos.data.remote.AppliedBundleDto
 import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
 import com.berdikariintigemilang.pos.data.remote.taxFor
 import com.berdikariintigemilang.pos.data.remote.totalFor
-import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.repository.AuthRepository
 import com.berdikariintigemilang.pos.data.repository.BundleRepository
 import com.berdikariintigemilang.pos.data.repository.ProductRepository
