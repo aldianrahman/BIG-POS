@@ -317,7 +317,7 @@ fun PosScreen(
         )
     }
 
-    // Ubah harga satuan (butuh verifikasi sales berwenang: id 38/54/60).
+    // Ubah harga satuan (butuh verifikasi sales berwenang: id 95/99/118).
     priceEditState.line?.let { line ->
         PriceEditDialog(
             line = line,
@@ -326,6 +326,10 @@ fun PosScreen(
             onDismiss = viewModel::dismissPriceEdit,
             onConfirm = { username, password, newPrice ->
                 viewModel.confirmPriceEdit(username, password, newPrice)
+            }
+        )
+    }
+
     // Gantung transaksi: tahan keranjang aktif + beri keterangan opsional.
     if (showHoldDialog) {
         HoldSaleDialog(

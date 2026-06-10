@@ -17,7 +17,6 @@ import com.berdikariintigemilang.pos.data.remote.AppliedBundleDto
 import com.berdikariintigemilang.pos.data.remote.ReceiptSettingDto
 import com.berdikariintigemilang.pos.data.remote.taxFor
 import com.berdikariintigemilang.pos.data.remote.totalFor
-import com.berdikariintigemilang.pos.core.network.ApiResult
 import com.berdikariintigemilang.pos.data.repository.AuthRepository
 import com.berdikariintigemilang.pos.data.repository.BundleRepository
 import com.berdikariintigemilang.pos.data.repository.ProductRepository
@@ -149,7 +148,7 @@ class PosViewModel @Inject constructor(
     private val _scanMessages = Channel<String>(Channel.BUFFERED)
     val scanMessages = _scanMessages.receiveAsFlow()
 
-    // Dialog ubah harga per baris keranjang (verifikasi sales 38/54/60).
+    // Dialog ubah harga per baris keranjang (verifikasi sales 95/99/118).
     private val _priceEditState = MutableStateFlow(PriceEditState())
     val priceEditState: StateFlow<PriceEditState> = _priceEditState
     private val _priceEditMessages = Channel<String>(Channel.BUFFERED)

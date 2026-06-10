@@ -29,7 +29,7 @@ import com.berdikariintigemilang.pos.data.cart.CartLine
 
 /**
  * Dialog ubah harga satuan satu baris keranjang. Kasir memasukkan username &
- * password sales berwenang (id 38/54/60) lalu harga baru per pcs. Harga baru
+ * password sales berwenang (id 95/99/118) lalu harga baru per pcs. Harga baru
  * tidak boleh melebihi harga master. Verifikasi & penerapan dilakukan di
  * [PosViewModel.confirmPriceEdit]; [submitting]/[error] berasal dari ViewModel.
  */
@@ -84,7 +84,11 @@ fun PriceEditDialog(
                 )
                 OutlinedTextField(
                     value = username,
-                    onValueChange = { username = it.trim() },
+                    // Jangan .trim() per ketukan: spasi yang baru diketik selalu
+                    // jadi trailing dan langsung terbuang, sehingga username ber-
+                    // spasi mustahil dimasukkan. Spasi di ujung dirapikan saat
+                    // verifikasi (AuthRepository.verifyPriceEditor).
+                    onValueChange = { username = it },
                     label = { Text("Username") },
                     singleLine = true,
                     enabled = !submitting,

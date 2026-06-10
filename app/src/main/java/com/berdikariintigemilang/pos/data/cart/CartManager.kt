@@ -43,7 +43,7 @@ data class CartLine(
      * saat mengubah harga & dicatat di log. Tidak ikut berubah saat harga diedit.
      */
     val masterPrice: Double = unitPrice,
-    /** Id karyawan (mis. 38/54/60) yang menurunkan harga baris ini; null bila masih harga master. */
+    /** Id user (mis. 95/99/118) yang menurunkan harga baris ini; null bila masih harga master. */
     val priceEditedByUserId: Long? = null,
     /** Username/nama karyawan yang mengubah harga (untuk log & tampilan). */
     val priceEditedByName: String? = null

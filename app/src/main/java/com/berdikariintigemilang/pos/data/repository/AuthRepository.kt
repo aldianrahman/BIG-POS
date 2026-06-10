@@ -91,8 +91,8 @@ class AuthRepository @Inject constructor(
      * Verifikasi kredensial karyawan yang berwenang menurunkan harga di kasir,
      * TANPA mengubah sesi kasir yang sedang login (token & user tidak ditimpa).
      *
-     * Berhasil hanya bila: kredensial benar DAN id karyawan termasuk daftar
-     * [Constants.PRICE_EDIT_AUTHORIZED_IDS] (mis. 38/54/60). Verifikasi password
+     * Berhasil hanya bila: kredensial benar DAN id user termasuk daftar
+     * [Constants.PRICE_EDIT_AUTHORIZED_IDS] (mis. 95/99/118). Verifikasi password
      * dilakukan di server sehingga membutuhkan koneksi internet.
      */
     suspend fun verifyPriceEditor(username: String, password: String): ApiResult<PriceEditor> {
