@@ -148,7 +148,7 @@ class PosViewModel @Inject constructor(
     private val _scanMessages = Channel<String>(Channel.BUFFERED)
     val scanMessages = _scanMessages.receiveAsFlow()
 
-    // Dialog ubah harga per baris keranjang (verifikasi sales 38/54/60).
+    // Dialog ubah harga per baris keranjang (verifikasi sales 95/99/118).
     private val _priceEditState = MutableStateFlow(PriceEditState())
     val priceEditState: StateFlow<PriceEditState> = _priceEditState
     private val _priceEditMessages = Channel<String>(Channel.BUFFERED)

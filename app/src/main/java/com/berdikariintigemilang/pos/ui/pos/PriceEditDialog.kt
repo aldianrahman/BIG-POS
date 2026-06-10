@@ -29,7 +29,7 @@ import com.berdikariintigemilang.pos.data.cart.CartLine
 
 /**
  * Dialog ubah harga satuan satu baris keranjang. Kasir memasukkan username &
- * password sales berwenang (id 38/54/60) lalu harga baru per pcs. Harga baru
+ * password sales berwenang (id 95/99/118) lalu harga baru per pcs. Harga baru
  * tidak boleh melebihi harga master. Verifikasi & penerapan dilakukan di
  * [PosViewModel.confirmPriceEdit]; [submitting]/[error] berasal dari ViewModel.
  */
