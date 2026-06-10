@@ -326,6 +326,10 @@ fun PosScreen(
             onDismiss = viewModel::dismissPriceEdit,
             onConfirm = { username, password, newPrice ->
                 viewModel.confirmPriceEdit(username, password, newPrice)
+            }
+        )
+    }
+
     // Gantung transaksi: tahan keranjang aktif + beri keterangan opsional.
     if (showHoldDialog) {
         HoldSaleDialog(
