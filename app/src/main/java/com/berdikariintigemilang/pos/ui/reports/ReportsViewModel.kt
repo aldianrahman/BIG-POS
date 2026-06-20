@@ -14,26 +14,38 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+
+/** Format tanggal untuk label rentang (mis. "20 Jun 2026"). */
+private val RANGE_LABEL_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 data class ReportsUiState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val groupBy: String = "day",
-    val rangeLabel: String = "7 hari terakhir",
+    val from: LocalDate = LocalDate.now(),
+    val to: LocalDate = LocalDate.now(),
     val rows: List<SalesReportRowDto> = emptyList(),
     val profit: ProfitReportDto? = null,
     val offline: Boolean = false,
     val error: String? = null
-)
+) {
+    /** Subjudul rentang: satu tanggal bila sama, atau "awal – akhir". */
+    val rangeLabel: String
+        get() = if (from == to) from.format(RANGE_LABEL_FMT)
+        else "${from.format(RANGE_LABEL_FMT)} – ${to.format(RANGE_LABEL_FMT)}"
+}
 
 /**
  * Laporan adalah hasil agregasi server (penjualan per kelompok + laba), jadi
  * server adalah satu-satunya sumber kebenaran — angka di HP selalu mengikuti
  * server, persis sama dengan tampilan web. Hanya tersedia saat online; saat
  * offline seluruh kartu dikosongkan dan ditampilkan pesan agar pengguna online.
+ *
+ * Rentang tanggal bisa dipilih (Dari–Sampai) seperti di web, default "hari ini"
+ * — sehingga laporan Android dapat disamakan ke rentang apa pun yang dilihat di
+ * web. Konversi waktu mengikuti web: from = 00:00:00, to = 23:59:59.
  *
  * Agar tidak ada selisih dengan web ("HP tidak langsung update"), laporan
  * disegarkan otomatis pada tiga momen — tanpa perlu tarik-ke-bawah manual:
@@ -77,6 +89,18 @@ class ReportsViewModel @Inject constructor(
         load()
     }
 
+    /** Ubah tanggal mulai; jaga agar tidak melewati tanggal akhir. */
+    fun setFrom(date: LocalDate) {
+        _state.update { it.copy(from = date, to = if (date.isAfter(it.to)) date else it.to) }
+        load()
+    }
+
+    /** Ubah tanggal akhir; jaga agar tidak mendahului tanggal mulai. */
+    fun setTo(date: LocalDate) {
+        _state.update { it.copy(to = date, from = if (date.isBefore(it.from)) date else it.from) }
+        load()
+    }
+
     fun load() {
         pushPending()
         fetch(isRefresh = false)
@@ -110,9 +134,11 @@ class ReportsViewModel @Inject constructor(
             markOffline()
             return
         }
-        val from = LocalDate.now().minusDays(6).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val to = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val groupBy = _state.value.groupBy
+        val s = _state.value
+        // Konversi rentang persis seperti web: dari 00:00:00 sampai 23:59:59.
+        val from = s.from.atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val to = s.to.atTime(23, 59, 59).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val groupBy = s.groupBy
         if (!silent) {
             _state.update {
                 if (isRefresh) it.copy(refreshing = true, error = null, offline = false)
