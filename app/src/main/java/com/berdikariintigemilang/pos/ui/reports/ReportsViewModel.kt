@@ -7,6 +7,7 @@ import com.berdikariintigemilang.pos.core.network.ConnectivityObserver
 import com.berdikariintigemilang.pos.data.remote.ProfitReportDto
 import com.berdikariintigemilang.pos.data.remote.SalesReportRowDto
 import com.berdikariintigemilang.pos.data.repository.ReportRepository
+import com.berdikariintigemilang.pos.data.sync.SyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,23 +31,43 @@ data class ReportsUiState(
 
 /**
  * Laporan adalah hasil agregasi server (penjualan per kelompok + laba), jadi
- * hanya tersedia saat online. Saat offline, seluruh kartu dikosongkan dan
- * ditampilkan pesan agar pengguna online. Otomatis dimuat ulang saat koneksi
- * kembali.
+ * server adalah satu-satunya sumber kebenaran — angka di HP selalu mengikuti
+ * server, persis sama dengan tampilan web. Hanya tersedia saat online; saat
+ * offline seluruh kartu dikosongkan dan ditampilkan pesan agar pengguna online.
+ *
+ * Agar tidak ada selisih dengan web ("HP tidak langsung update"), laporan
+ * disegarkan otomatis pada tiga momen — tanpa perlu tarik-ke-bawah manual:
+ *  1. Koneksi kembali  -> muat ulang snapshot server.
+ *  2. Saat dibuka/refresh -> dorong dulu transaksi lokal yang belum tersinkron
+ *     ke server, supaya server memuat penjualan terbaru sebelum laporan ditarik.
+ *  3. Setiap sinkronisasi SELESAI -> tarik ulang laporan tanpa kedip layar,
+ *     sehingga transaksi yang baru tersinkron (mis. penjualan dari tab Kasir)
+ *     langsung tampak — sama seperti web yang selalu menampilkan data server.
  */
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
     private val reportRepository: ReportRepository,
-    private val connectivity: ConnectivityObserver
+    private val connectivity: ConnectivityObserver,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReportsUiState(offline = !connectivity.isOnlineNow()))
     val state: StateFlow<ReportsUiState> = _state
 
     init {
+        // Koneksi berubah: online -> muat ulang; offline -> kosongkan & beri pesan.
         viewModelScope.launch {
             connectivity.isOnline.collect { online ->
                 if (online) load() else markOffline()
+            }
+        }
+        // Setiap sinkronisasi SELESAI (saat online), tarik ulang laporan tanpa kedip
+        // agar transaksi yang baru tersinkron langsung tercermin — sama seperti web.
+        viewModelScope.launch {
+            var prev = false
+            syncManager.syncing.collect { syncing ->
+                if (prev && !syncing && connectivity.isOnlineNow()) fetch(isRefresh = false, silent = true)
+                prev = syncing
             }
         }
     }
@@ -56,10 +77,16 @@ class ReportsViewModel @Inject constructor(
         load()
     }
 
-    fun load() = fetch(isRefresh = false)
+    fun load() {
+        pushPending()
+        fetch(isRefresh = false)
+    }
 
     /** Muat ulang via tarik-ke-bawah. */
-    fun refresh() = fetch(isRefresh = true)
+    fun refresh() {
+        pushPending()
+        fetch(isRefresh = true)
+    }
 
     private fun markOffline() {
         _state.update {
@@ -67,7 +94,18 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
-    private fun fetch(isRefresh: Boolean) {
+    /**
+     * Dorong penjualan lokal yang belum tersinkron ke server lebih dulu, supaya
+     * server (sumber laporan) memuat data terbaru. Setelah sinkronisasi selesai,
+     * observer di [init] otomatis menarik ulang laporan, jadi di sini cukup
+     * memicu dorongannya. Aman dipanggil berkali-kali (di-skip bila sedang sync).
+     */
+    private fun pushPending() {
+        if (!connectivity.isOnlineNow() || syncManager.syncing.value) return
+        viewModelScope.launch { runCatching { syncManager.syncPending() } }
+    }
+
+    private fun fetch(isRefresh: Boolean, silent: Boolean = false) {
         if (!connectivity.isOnlineNow()) {
             markOffline()
             return
@@ -75,19 +113,21 @@ class ReportsViewModel @Inject constructor(
         val from = LocalDate.now().minusDays(6).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val to = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val groupBy = _state.value.groupBy
-        _state.update {
-            if (isRefresh) it.copy(refreshing = true, error = null, offline = false)
-            else it.copy(loading = true, error = null, offline = false)
+        if (!silent) {
+            _state.update {
+                if (isRefresh) it.copy(refreshing = true, error = null, offline = false)
+                else it.copy(loading = true, error = null, offline = false)
+            }
         }
         viewModelScope.launch {
             when (val sales = reportRepository.sales(from, to, groupBy)) {
-                is ApiResult.Success -> _state.update { it.copy(rows = sales.data) }
+                is ApiResult.Success -> _state.update { it.copy(rows = sales.data, error = null) }
                 is ApiResult.Error -> _state.update { it.copy(error = sales.message) }
             }
             (reportRepository.profit(from, to) as? ApiResult.Success)?.let { res ->
                 _state.update { it.copy(profit = res.data) }
             }
-            _state.update { it.copy(loading = false, refreshing = false) }
+            _state.update { it.copy(loading = false, refreshing = false, offline = false) }
         }
     }
 }
