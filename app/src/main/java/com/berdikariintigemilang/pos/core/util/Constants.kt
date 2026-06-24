@@ -12,7 +12,7 @@ object Constants {
      * halaman kasir. Hanya kredensial milik salah satu id ini yang boleh
      * menurunkan harga satuan saat transaksi. Ubah daftar di sini bila perlu.
      */
-    val PRICE_EDIT_AUTHORIZED_IDS = setOf(95L, 99L, 118L)
+    val PRICE_EDIT_AUTHORIZED_IDS = setOf(95L, 99L, 118L, 196L, 102L, 601L, 241L)
 
     /**
      * ID record versi aplikasi BIG-POS di server, dipakai untuk gating versi
